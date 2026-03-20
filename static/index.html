@@ -187,7 +187,7 @@
     <div class="flex items-center justify-between mb-6">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">稽核發現報告</h2>
-        <p class="text-sm text-gray-500">依 IIA 5C 格式呈現（現況/準則/原因/影響/建議）</p>
+        <p class="text-sm text-gray-500">依 IIA 5C 格式呈現，含法源依據及應辦事項</p>
       </div>
       <button onclick="startNewAudit()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">重新稽核</button>
     </div>
@@ -687,6 +687,11 @@ function renderFindings() {
           <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </summary>
         <div class="px-5 pb-5 pt-2 space-y-4 border-t border-gray-100">
+          ${f.legal_basis ? `
+          <div class="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 flex items-start gap-2">
+            <span class="text-xs font-bold text-indigo-600 shrink-0 mt-0.5">⚖️ 法源依據</span>
+            <p class="text-sm text-indigo-900">${escHtml(f.legal_basis)}</p>
+          </div>` : ''}
           <div class="grid grid-cols-1 gap-4">
             <div>
               <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">現況 (Condition)</p>
@@ -708,6 +713,11 @@ function renderFindings() {
               <p class="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">建議 (Recommendation)</p>
               <p class="text-sm text-green-800">${escHtml(f.recommendation || '')}</p>
             </div>
+            ${f.action_items ? `
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <p class="text-xs font-semibold text-orange-700 uppercase tracking-wide mb-2">📋 應辦事項</p>
+              <div class="text-sm text-orange-900 whitespace-pre-line">${escHtml(f.action_items)}</div>
+            </div>` : ''}
           </div>
         </div>
       </details>
