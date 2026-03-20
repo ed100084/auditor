@@ -49,3 +49,19 @@ class QuestionResponseItem(BaseModel):
 
 class ResponsesInput(BaseModel):
     responses: List[QuestionResponseItem]
+
+
+# ─── 政府機關格式（衛福部/數位部 CI 稽核） ────────────────────────
+class GovFinding(BaseModel):
+    finding_type: str       # "法規不符合" | "待改善缺失" | "建議缺失"
+    title: str              # 簡短標題（不符合基準/待改善目標/建議事項）
+    legal_basis: str        # 法源依據：法規名稱＋條號
+    legal_text: str         # 應辦事項：法條原文（「機關應…」等強制義務段落）
+    finding_description: str  # 稽核發現說明：觀察到的具體事實
+    evidence: List[str]     # 佐證資料：文件/系統畫面/訪談紀錄等清單
+    recommendation: str     # 改善建議：具體改善措施與建議期限
+
+
+class GovFindingsReport(BaseModel):
+    executive_summary: str
+    findings: List[GovFinding]

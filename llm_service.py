@@ -290,3 +290,95 @@ async def stream_findings(session: dict):
         yield "data: [DONE]\n\n"
 
     return _generate()
+
+
+async def stream_gov_findings(session: dict):
+    """政府機關格式稽核發現報告（衛福部/數位部 CI 稽核格式）"""
+    framework_ids = session.get("frameworks", [])
+    custom_text = session.get("custom_framework_text", "")
+    framework_text = get_framework_text(framework_ids, custom_text)
+    framework_names = ", ".join(get_framework_names(framework_ids))
+    if custom_text:
+        framework_names += ", 自訂法規文件"
+
+    scope = session.get("scope", "")
+    context = session.get("context", "")
+    responsibility_level = session.get("responsibility_level")
+    questions = session.get("questions", [])
+    responses = session.get("responses", [])
+
+    level_note = f"，受稽單位責任等級：{responsibility_level} 級" if responsibility_level else ""
+    qa_text = _build_qa_text(questions, responses)
+
+    json_schema = (
+        '{"executive_summary":"string","findings":['
+        '{"finding_type":"法規不符合|待改善缺失|建議缺失",'
+        '"title":"string",'
+        '"legal_basis":"string",'
+        '"legal_text":"string",'
+        '"finding_description":"string",'
+        '"evidence":["string"],'
+        '"recommendation":"string"}]}'
+    )
+
+    system_prompt = "\n".join([
+        "你是一位資深資通安全稽核委員，依照台灣政府機關資安稽核格式（衛福部/數位部 CI 稽核）撰寫正式稽核發現報告。",
+        "根據稽核問答紀錄，對照適用法規框架，識別缺失並產生結構化稽核發現。",
+        "",
+        "【稽核發現類型定義】",
+        "- 法規不符合：有明確法規條文要求，但受稽單位完全未執行或嚴重偏離，屬強制改善事項",
+        "- 待改善缺失：執行不完整、程序不健全，或雖有執行但未達預期效果，需限期改善",
+        "- 建議缺失：現況雖符合法規基本要求，但仍有強化空間，屬建議性質",
+        "",
+        "【欄位說明】",
+        "- finding_type：三種類型之一（法規不符合 / 待改善缺失 / 建議缺失）",
+        "- title：本項缺失的簡短標題，20 字以內",
+        "- legal_basis：法源依據，具體條文全名（條號層級），例：「資通安全管理法第18條第1項」",
+        "  若適用多個法條以頓號（、）連接",
+        "- legal_text：應辦事項，直接引用法條原文中的強制義務段落（「機關應…」「應辦理…」「不得…」等）",
+        "  格式：「[法規名稱第X條]：原文內容」，若涉及多條法規分段列出",
+        "  此欄位必須是法條原文，不可自行改寫或摘要",
+        "- finding_description：稽核發現說明，具體描述觀察到的不符合事實，引用受稽單位回覆為佐證",
+        "- evidence：佐證資料清單（array），列出已確認的文件/系統畫面/訪談內容等，若無具體佐證則填 [\"受稽單位訪談紀錄\"]",
+        "- recommendation：改善建議，具體可執行的改善措施，依發現類型給予建議完成期限",
+        "  法規不符合：建議 1 個月內完成；待改善缺失：3 個月內；建議缺失：6 個月內",
+        "",
+        "【輸出規則】",
+        "- 僅輸出純 JSON object，不含 markdown 或說明文字",
+        f"- 格式：{json_schema}",
+        "- executive_summary：繁體中文，2-3 段，適合機關首長閱覽",
+        "- 發現依類型排序：法規不符合 → 待改善缺失 → 建議缺失",
+        "- 僅針對有具體缺失的項目產生發現，若受稽單位回覆顯示已完全符合則不產生",
+        "- legal_text 必須是法條原文，不可改寫",
+    ])
+
+    user_message = (
+        f"稽核範圍：{scope}{level_note}\n"
+        f"適用法規框架：{framework_names}\n\n"
+        f"法規參考內容：\n{framework_text}\n\n"
+        f"稽核問答紀錄：\n{qa_text}\n\n"
+        "請以政府機關稽核格式產生稽核發現報告。"
+    )
+
+    msgs = [SystemMessage(content=system_prompt), UserMessage(content=user_message)]
+    response = await run_in_threadpool(
+        lambda: _call_with_retry(lambda: _get_client().complete(
+            messages=msgs,
+            model=settings.AZURE_AI_MODEL,
+            max_tokens=8192,
+            temperature=0.2,
+        ))
+    )
+    raw = response.choices[0].message.content
+    if not raw:
+        raise ValueError(f"模型回傳空內容 (finish_reason={getattr(response.choices[0], 'finish_reason', 'N/A')})")
+    raw = _strip_json_fences(raw)
+    raw = _repair_truncated_json(raw)
+
+    async def _generate():
+        chunk_size = 50
+        for i in range(0, len(raw), chunk_size):
+            yield f"data: {json.dumps({'chunk': raw[i:i+chunk_size]})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return _generate()
