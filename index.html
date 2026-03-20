@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資安稽核助手</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .step-panel { display: none; }
+    .step-panel.active { display: block; }
+    .step-indicator.done { background: #059669; color: white; }
+    .step-indicator.current { background: #2563eb; color: white; }
+    .step-indicator.pending { background: #e5e7eb; color: #6b7280; }
+    .framework-card input:checked + .card-body { border-color: #2563eb; background: #eff6ff; }
+    .risk-High { border-left: 4px solid #dc2626; }
+    .risk-Medium { border-left: 4px solid #d97706; }
+    .risk-Low { border-left: 4px solid #2563eb; }
+    .badge-High { background: #fee2e2; color: #991b1b; }
+    .badge-Medium { background: #fef3c7; color: #92400e; }
+    .badge-Low { background: #dbeafe; color: #1e40af; }
+    .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 40px; height: 40px; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- Header -->
+<header class="bg-white border-b border-gray-200 px-6 py-4">
+  <div class="max-w-4xl mx-auto flex items-center gap-3">
+    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">稽</div>
+    <h1 class="text-xl font-semibold text-gray-900">資安稽核助手</h1>
+    <span class="ml-auto text-sm text-gray-400">資通安全法規 AI 稽核問答產生器</span>
+  </div>
+</header>
+
+<!-- Step Navigator -->
+<div class="bg-white border-b border-gray-100 px-6 py-3">
+  <div class="max-w-4xl mx-auto flex items-center gap-2 text-sm">
+    <div id="nav-1" class="flex items-center gap-1.5 cursor-pointer" onclick="goToStep(1)">
+      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium current">1</span>
+      <span class="text-gray-600">選擇框架</span>
+    </div>
+    <div class="w-8 h-px bg-gray-200"></div>
+    <div id="nav-2" class="flex items-center gap-1.5 cursor-pointer" onclick="goToStep(2)">
+      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium pending">2</span>
+      <span class="text-gray-400">稽核範圍</span>
+    </div>
+    <div class="w-8 h-px bg-gray-200"></div>
+    <div id="nav-3" class="flex items-center gap-1.5 cursor-pointer" onclick="goToStep(3)">
+      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium pending">3</span>
+      <span class="text-gray-400">稽核問題</span>
+    </div>
+    <div class="w-8 h-px bg-gray-200"></div>
+    <div id="nav-4" class="flex items-center gap-1.5 cursor-pointer" onclick="goToStep(4)">
+      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium pending">4</span>
+      <span class="text-gray-400">受稽回覆</span>
+    </div>
+    <div class="w-8 h-px bg-gray-200"></div>
+    <div id="nav-5" class="flex items-center gap-1.5">
+      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium pending">5</span>
+      <span class="text-gray-400">稽核發現</span>
+    </div>
+  </div>
+</div>
+
+<main class="max-w-4xl mx-auto px-6 py-8">
+
+  <!-- STEP 1: Framework Selection -->
+  <div id="step-1" class="step-panel active">
+    <h2 class="text-lg font-semibold text-gray-900 mb-1">選擇稽核法規框架</h2>
+    <p class="text-sm text-gray-500 mb-6">台灣資通安全法規為主要框架（預設勾選），ISO 標準為輔助。可加選或上傳自訂法規文件。</p>
+
+    <div id="framework-list" class="space-y-3 mb-6">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- Responsibility Level -->
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-2">受稽單位責任等級（選填）</label>
+      <select id="resp-level" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="">-- 不指定 --</option>
+        <option value="A">A 級（國家安全、全國性重要服務）</option>
+        <option value="B">B 級（核心技術機關、關鍵基礎設施）</option>
+        <option value="C">C 級（一般政府機關）</option>
+        <option value="D">D 級</option>
+        <option value="E">E 級（小型機關）</option>
+      </select>
+      <p class="text-xs text-gray-400 mt-1">指定等級後，系統將依該等級的適用控制要求產生問題</p>
+    </div>
+
+    <!-- Custom file upload -->
+    <div id="custom-upload-section" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+      <label class="block text-sm font-medium text-blue-800 mb-2">上傳自訂法規文件</label>
+      <input type="file" id="custom-file" accept=".txt,.pdf,.docx" class="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200">
+      <p class="text-xs text-gray-500 mt-1">支援 .txt .pdf .docx，上限 10MB</p>
+      <div id="upload-status" class="mt-2 text-xs text-green-600 hidden"></div>
+    </div>
+
+    <button onclick="goStep1Next()" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+      下一步：設定稽核範圍 →
+    </button>
+  </div>
+
+  <!-- STEP 2: Scope Input -->
+  <div id="step-2" class="step-panel">
+    <h2 class="text-lg font-semibold text-gray-900 mb-1">設定稽核範圍與情境</h2>
+    <p class="text-sm text-gray-500 mb-6">描述越具體，AI 產生的問題越精準。</p>
+
+    <div class="space-y-5">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">稽核範圍 <span class="text-red-500">*</span></label>
+        <textarea id="scope-input" rows="3" placeholder="例如：資訊服務委外管理、存取控制作業、事件應變機制、人員教育訓練..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+        <div class="flex justify-between mt-1">
+          <span class="text-xs text-gray-400">請描述本次稽核的主要範圍（系統、流程或功能）</span>
+          <span id="scope-count" class="text-xs text-gray-400">0 字</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5">稽核情境 / 背景說明 <span class="text-red-500">*</span></label>
+        <textarea id="context-input" rows="4" placeholder="例如：年度例行稽核，重點關注 2023 年新增之雲端服務委外採購流程是否符合資通安全管理法第 15 條委外管理規定，以及廠商資安能力驗證機制..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+        <div class="flex justify-between mt-1">
+          <span class="text-xs text-gray-400">提供背景脈絡，幫助 AI 理解稽核重點</span>
+          <span id="context-count" class="text-xs text-gray-400">0 字</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3 mt-6">
+      <button onclick="goToStep(1)" class="px-5 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">← 上一步</button>
+      <button onclick="goStep2Next()" class="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+        產生稽核問題 →
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 3: Question Editor -->
+  <div id="step-3" class="step-panel">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">稽核問題清單</h2>
+        <p class="text-sm text-gray-500">可新增、刪除或編輯問題，確認後進入下一步</p>
+      </div>
+      <span id="q-count-badge" class="bg-blue-100 text-blue-700 text-sm font-medium px-3 py-1 rounded-full">0 題</span>
+    </div>
+
+    <div id="question-list" class="space-y-3 mb-6">
+      <!-- Populated by JS -->
+    </div>
+
+    <button onclick="addQuestion()" class="w-full border-2 border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors mb-6">
+      + 新增問題
+    </button>
+
+    <div class="flex gap-3">
+      <button onclick="goToStep(2)" class="px-5 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">← 上一步</button>
+      <button onclick="goStep3Next()" class="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+        進入受稽回覆 →
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 4: Responses -->
+  <div id="step-4" class="step-panel">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">輸入受稽單位回覆</h2>
+        <p class="text-sm text-gray-500">依序輸入受稽單位對每個問題的回覆</p>
+      </div>
+      <span id="resp-progress" class="text-sm font-medium text-gray-600">已回覆 0 / 0</span>
+    </div>
+
+    <div id="response-list" class="space-y-5 mb-6">
+      <!-- Populated by JS -->
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="goToStep(3)" class="px-5 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">← 上一步</button>
+      <button onclick="goStep4Next()" class="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-medium hover:bg-green-700 transition-colors">
+        產生稽核發現 →
+      </button>
+    </div>
+  </div>
+
+  <!-- STEP 5: Findings -->
+  <div id="step-5" class="step-panel">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">稽核發現報告</h2>
+        <p class="text-sm text-gray-500">依 IIA 5C 格式呈現（現況/準則/原因/影響/建議）</p>
+      </div>
+      <button onclick="startNewAudit()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">重新稽核</button>
+    </div>
+
+    <!-- Executive Summary -->
+    <div id="exec-summary" class="bg-gray-50 border border-gray-200 rounded-lg p-5 mb-6 hidden">
+      <h3 class="text-sm font-semibold text-gray-700 mb-2">執行摘要</h3>
+      <div id="exec-summary-text" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed"></div>
+    </div>
+
+    <!-- Findings List -->
+    <div id="findings-list" class="space-y-4">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="hidden fixed inset-0 bg-white/80 flex items-center justify-center z-50">
+    <div class="text-center">
+      <div class="spinner mx-auto mb-4"></div>
+      <p id="loading-text" class="text-gray-600 font-medium">處理中...</p>
+      <p class="text-sm text-gray-400 mt-1">請稍候</p>
+    </div>
+  </div>
+
+  <!-- Error Toast -->
+  <div id="error-toast" class="hidden fixed bottom-6 right-6 bg-red-600 text-white px-5 py-3 rounded-lg shadow-lg z-50 max-w-sm">
+    <p id="error-text" class="text-sm"></p>
+  </div>
+
+</main>
+
+<script>
+// ─── Configuration ───────────────────────────────────────────
+const API_BASE = "https://secauditor.azurewebsites.net";
+
+// ─── App State ───────────────────────────────────────────────
+const S = {
+  sessionId: null,
+  currentStep: 1,
+  frameworks: [],
+  responsibilityLevel: null,
+  questions: [],
+  responses: {},
+  findings: null,
+};
+
+// ─── Init ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadFrameworks();
+  setupCharCounters();
+});
+
+// ─── API Helper ──────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(`${API_BASE}/api${path}`, opts);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiUpload(path, file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE}/api${path}`, { method: 'POST', body: fd });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ─── Loading / Error ─────────────────────────────────────────
+function showLoading(text = '處理中...') {
+  document.getElementById('loading-text').textContent = text;
+  document.getElementById('loading-overlay').classList.remove('hidden');
+}
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.add('hidden');
+}
+function showError(msg) {
+  const t = document.getElementById('error-toast');
+  document.getElementById('error-text').textContent = msg;
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), 5000);
+}
+
+// ─── Step Navigation ─────────────────────────────────────────
+function goToStep(n) {
+  document.querySelectorAll('.step-panel').forEach(el => el.classList.remove('active'));
+  document.getElementById(`step-${n}`).classList.add('active');
+  S.currentStep = n;
+  updateNavBar(n);
+  window.scrollTo(0, 0);
+}
+
+function updateNavBar(current) {
+  for (let i = 1; i <= 5; i++) {
+    const nav = document.getElementById(`nav-${i}`);
+    if (!nav) continue;
+    const dot = nav.querySelector('.step-indicator');
+    const label = nav.querySelector('span:last-child');
+    dot.className = 'step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium';
+    if (i < current) {
+      dot.classList.add('done');
+      label.className = 'text-gray-600';
+    } else if (i === current) {
+      dot.classList.add('current');
+      label.className = 'text-blue-700 font-medium';
+    } else {
+      dot.classList.add('pending');
+      label.className = 'text-gray-400';
+    }
+  }
+}
+
+// ─── STEP 1: Frameworks ──────────────────────────────────────
+let allFrameworks = [];
+
+async function loadFrameworks() {
+  try {
+    allFrameworks = await api('GET', '/frameworks');
+  } catch (e) {
+    // Fallback to built-in list if server not running yet
+    allFrameworks = [
+      { id: 'csma_core', name: '資通安全管理法', name_en: 'CSMA', description: '資通安全管理法及施行細則', primary: true },
+      { id: 'csma_classification', name: '責任等級分級辦法', name_en: 'Level Classification', description: 'A-E 等級管理、技術、人員控制要求', primary: true },
+      { id: 'csma_incident', name: '事件通報及應變辦法', name_en: 'Incident Response', description: '1小時通報SLA、事件分級、應變程序', primary: true },
+      { id: 'csma_sharing', name: '情資分享辦法', name_en: 'Info Sharing', description: '威脅情資分享義務與保密規定', primary: false },
+      { id: 'iso27001', name: 'ISO 27001:2022', name_en: 'ISO 27001', description: 'Annex A 93 項控制措施', primary: false },
+      { id: 'iso27701', name: 'ISO 27701:2025', name_en: 'ISO 27701', description: '隱私資訊管理系統控制措施', primary: false },
+    ];
+  }
+  renderFrameworks();
+}
+
+function renderFrameworks() {
+  const container = document.getElementById('framework-list');
+  container.innerHTML = allFrameworks.map(fw => `
+    <label class="framework-card block cursor-pointer">
+      <input type="checkbox" value="${fw.id}" class="sr-only framework-checkbox"
+        ${fw.primary ? 'checked' : ''}
+        onchange="onFrameworkChange('${fw.id}', this.checked)">
+      <div class="card-body border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors ${fw.primary ? 'border-blue-500 bg-blue-50' : ''}">
+        <div class="flex items-start gap-3">
+          <div class="mt-0.5">
+            <div class="w-5 h-5 rounded border-2 ${fw.primary ? 'bg-blue-600 border-blue-600' : 'border-gray-300'} flex items-center justify-center fw-check-${fw.id}">
+              ${fw.primary ? '<svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' : ''}
+            </div>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-gray-900 text-sm">${fw.name}</span>
+              <span class="text-xs text-gray-400">${fw.name_en}</span>
+              ${fw.primary ? '<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">主要法規</span>' : ''}
+            </div>
+            <p class="text-xs text-gray-500 mt-0.5">${fw.description}</p>
+          </div>
+        </div>
+      </div>
+    </label>
+    ${fw.id === 'iso27701' ? `
+    <label class="framework-card block cursor-pointer">
+      <input type="checkbox" value="custom" class="sr-only framework-checkbox" onchange="onCustomToggle(this.checked)">
+      <div class="card-body border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-300 transition-colors">
+        <div class="flex items-start gap-3">
+          <div class="mt-0.5">
+            <div class="w-5 h-5 rounded border-2 border-gray-300 flex items-center justify-center fw-check-custom"></div>
+          </div>
+          <div>
+            <span class="font-medium text-gray-700 text-sm">自訂法規 / 標準文件</span>
+            <p class="text-xs text-gray-400 mt-0.5">上傳您的內部規範、作業程序或其他法規文件</p>
+          </div>
+        </div>
+      </div>
+    </label>
+    ` : ''}
+  `).join('');
+
+  // init selected frameworks
+  S.frameworks = allFrameworks.filter(fw => fw.primary).map(fw => fw.id);
+}
+
+function onFrameworkChange(id, checked) {
+  const box = document.querySelector(`.fw-check-${id}`);
+  const card = box.closest('.card-body');
+  if (checked) {
+    S.frameworks.push(id);
+    box.classList.replace('border-gray-300', 'border-blue-600');
+    box.classList.add('bg-blue-600');
+    box.innerHTML = '<svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';
+    card.classList.add('border-blue-500', 'bg-blue-50');
+    card.classList.remove('border-gray-200');
+  } else {
+    S.frameworks = S.frameworks.filter(f => f !== id);
+    box.classList.replace('border-blue-600', 'border-gray-300');
+    box.classList.remove('bg-blue-600');
+    box.innerHTML = '';
+    card.classList.remove('border-blue-500', 'bg-blue-50');
+    card.classList.add('border-gray-200');
+  }
+}
+
+function onCustomToggle(checked) {
+  const section = document.getElementById('custom-upload-section');
+  onFrameworkChange('custom', checked);
+  if (checked) {
+    section.classList.remove('hidden');
+    const box = document.querySelector('.fw-check-custom');
+    const card = box.closest('.card-body');
+    box.classList.replace('border-gray-300', 'border-blue-600');
+    box.classList.add('bg-blue-600');
+    box.innerHTML = '<svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';
+    card.classList.add('border-blue-400');
+    card.classList.remove('border-gray-300');
+  } else {
+    section.classList.add('hidden');
+  }
+}
+
+async function goStep1Next() {
+  if (S.frameworks.length === 0) { showError('請至少選擇一個法規框架'); return; }
+
+  showLoading('建立稽核工作階段...');
+  try {
+    if (!S.sessionId) {
+      const res = await api('POST', '/sessions');
+      S.sessionId = res.session_id;
+    }
+
+    // Upload custom file if selected
+    const fileInput = document.getElementById('custom-file');
+    if (S.frameworks.includes('custom') && fileInput.files.length > 0) {
+      showLoading('上傳自訂文件...');
+      await apiUpload(`/sessions/${S.sessionId}/upload`, fileInput.files[0]);
+    }
+
+    S.responsibilityLevel = document.getElementById('resp-level').value || null;
+    await api('POST', `/sessions/${S.sessionId}/framework`, {
+      frameworks: S.frameworks.filter(f => f !== 'custom'),
+      responsibility_level: S.responsibilityLevel,
+    });
+
+    goToStep(2);
+  } catch (e) {
+    showError('發生錯誤：' + e.message);
+  } finally {
+    hideLoading();
+  }
+}
+
+// ─── STEP 2: Scope ────────────────────────────────────────────
+function setupCharCounters() {
+  ['scope', 'context'].forEach(id => {
+    const el = document.getElementById(`${id}-input`);
+    const cnt = document.getElementById(`${id}-count`);
+    if (el && cnt) {
+      el.addEventListener('input', () => { cnt.textContent = el.value.length + ' 字'; });
+    }
+  });
+}
+
+async function goStep2Next() {
+  const scope = document.getElementById('scope-input').value.trim();
+  const context = document.getElementById('context-input').value.trim();
+  if (scope.length < 10) { showError('請輸入至少 10 字的稽核範圍'); return; }
+  if (context.length < 10) { showError('請輸入至少 10 字的稽核情境'); return; }
+
+  showLoading('AI 正在產生稽核問題...');
+  try {
+    await api('POST', `/sessions/${S.sessionId}/scope`, { scope, context });
+    const res = await api('POST', `/sessions/${S.sessionId}/questions/generate`);
+    S.questions = res.questions;
+    renderQuestions();
+    goToStep(3);
+  } catch (e) {
+    showError('產生問題失敗：' + e.message);
+  } finally {
+    hideLoading();
+  }
+}
+
+// ─── STEP 3: Questions ────────────────────────────────────────
+function renderQuestions() {
+  const container = document.getElementById('question-list');
+  document.getElementById('q-count-badge').textContent = S.questions.length + ' 題';
+  container.innerHTML = S.questions.map((q, i) => `
+    <div class="bg-white border border-gray-200 rounded-lg p-4" id="qcard-${q.id}">
+      <div class="flex items-start gap-3">
+        <span class="text-xs font-bold text-gray-400 mt-1 w-6 shrink-0 text-right">${i + 1}</span>
+        <div class="flex-1">
+          <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent"
+            rows="2" onchange="updateQuestionText('${q.id}', this.value)">${escHtml(q.text)}</textarea>
+          <div class="flex items-center gap-2 mt-2">
+            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${escHtml(q.category)}</span>
+            <span class="text-xs text-gray-400">${escHtml(q.source_framework)}</span>
+            ${q.reference ? `<span class="text-xs text-blue-500">${escHtml(q.reference)}</span>` : ''}
+          </div>
+        </div>
+        <button onclick="removeQuestion('${q.id}')" class="text-gray-300 hover:text-red-400 transition-colors mt-1 shrink-0">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateQuestionText(id, text) {
+  const q = S.questions.find(q => q.id === id);
+  if (q) q.text = text;
+}
+
+function removeQuestion(id) {
+  S.questions = S.questions.filter(q => q.id !== id);
+  renderQuestions();
+}
+
+function addQuestion() {
+  S.questions.push({
+    id: crypto.randomUUID(),
+    text: '',
+    category: '治理與合規',
+    source_framework: '自訂',
+    reference: '',
+  });
+  renderQuestions();
+  // Focus last textarea
+  const textareas = document.querySelectorAll('#question-list textarea');
+  if (textareas.length) textareas[textareas.length - 1].focus();
+}
+
+async function goStep3Next() {
+  const valid = S.questions.filter(q => q.text.trim().length > 5);
+  if (valid.length === 0) { showError('請至少保留一個有效問題'); return; }
+
+  showLoading('儲存問題清單...');
+  try {
+    await api('PUT', `/sessions/${S.sessionId}/questions`, { questions: valid });
+    S.questions = valid;
+    renderResponses();
+    goToStep(4);
+  } catch (e) {
+    showError('儲存失敗：' + e.message);
+  } finally {
+    hideLoading();
+  }
+}
+
+// ─── STEP 4: Responses ────────────────────────────────────────
+function renderResponses() {
+  const container = document.getElementById('response-list');
+  updateRespProgress();
+  container.innerHTML = S.questions.map((q, i) => `
+    <div class="bg-white border border-gray-200 rounded-lg p-4">
+      <div class="flex items-start gap-2 mb-3">
+        <span class="text-xs font-bold text-blue-600 shrink-0 mt-0.5">Q${i + 1}</span>
+        <div>
+          <p class="text-sm font-medium text-gray-800">${escHtml(q.text)}</p>
+          <div class="flex gap-2 mt-1">
+            <span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">${escHtml(q.category)}</span>
+            ${q.reference ? `<span class="text-xs text-blue-400">${escHtml(q.reference)}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <textarea class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        rows="3" placeholder="請輸入受稽單位的回覆..."
+        oninput="updateResponse('${q.id}', this.value)">${escHtml(S.responses[q.id] || '')}</textarea>
+    </div>
+  `).join('');
+}
+
+function updateResponse(id, text) {
+  S.responses[id] = text;
+  updateRespProgress();
+}
+
+function updateRespProgress() {
+  const answered = S.questions.filter(q => (S.responses[q.id] || '').trim().length > 0).length;
+  document.getElementById('resp-progress').textContent = `已回覆 ${answered} / ${S.questions.length}`;
+}
+
+async function goStep4Next() {
+  const responses = S.questions.map(q => ({
+    question_id: q.id,
+    response_text: S.responses[q.id] || '',
+  }));
+
+  showLoading('儲存回覆並產生稽核發現...');
+  try {
+    await api('POST', `/sessions/${S.sessionId}/responses`, { responses });
+  } catch (e) {
+    hideLoading();
+    showError('儲存回覆失敗：' + e.message);
+    return;
+  }
+
+  // Switch to Step 5 and show streaming
+  goToStep(5);
+  document.getElementById('findings-list').innerHTML = `
+    <div class="text-center py-12">
+      <div class="spinner mx-auto mb-4"></div>
+      <p class="text-gray-600 font-medium">AI 正在分析問答紀錄，產生稽核發現...</p>
+      <p class="text-sm text-gray-400 mt-1">此步驟約需 15–30 秒</p>
+    </div>
+  `;
+  document.getElementById('exec-summary').classList.add('hidden');
+
+  hideLoading();
+  streamFindings();
+}
+
+// ─── STEP 5: Findings (SSE) ───────────────────────────────────
+function streamFindings() {
+  const evtSource = new EventSource(`${API_BASE}/api/sessions/${S.sessionId}/findings/stream`);
+  let buffer = '';
+
+  evtSource.onmessage = (e) => {
+    if (e.data === '[DONE]') {
+      evtSource.close();
+      try {
+        const cleaned = buffer.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+        S.findings = JSON.parse(cleaned);
+        renderFindings();
+      } catch (err) {
+        document.getElementById('findings-list').innerHTML = `
+          <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+            解析稽核發現時發生錯誤：${err.message}<br>
+            <button onclick="goStep4Next()" class="mt-2 underline">重新產生</button>
+          </div>`;
+      }
+      return;
+    }
+    try {
+      const parsed = JSON.parse(e.data);
+      buffer += parsed.chunk || '';
+    } catch (_) {}
+  };
+
+  evtSource.onerror = () => {
+    evtSource.close();
+    document.getElementById('findings-list').innerHTML = `
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+        連線中斷，請重新產生。
+        <button onclick="goStep4Next()" class="mt-2 underline">重試</button>
+      </div>`;
+  };
+}
+
+function renderFindings() {
+  const report = S.findings;
+  if (!report) return;
+
+  // Executive Summary
+  if (report.executive_summary) {
+    const sumEl = document.getElementById('exec-summary');
+    document.getElementById('exec-summary-text').textContent = report.executive_summary;
+    sumEl.classList.remove('hidden');
+  }
+
+  // Findings
+  const findings = report.findings || [];
+  const container = document.getElementById('findings-list');
+
+  if (findings.length === 0) {
+    container.innerHTML = `<div class="bg-green-50 border border-green-200 rounded-lg p-5 text-center">
+      <p class="text-green-700 font-medium">未發現重大稽核缺失</p>
+      <p class="text-sm text-green-600 mt-1">受稽單位的回覆均符合適用法規要求</p>
+    </div>`;
+    return;
+  }
+
+  // Summary badges
+  const high = findings.filter(f => f.risk_level === 'High').length;
+  const med = findings.filter(f => f.risk_level === 'Medium').length;
+  const low = findings.filter(f => f.risk_level === 'Low').length;
+
+  container.innerHTML = `
+    <div class="flex gap-3 mb-4">
+      ${high ? `<span class="bg-red-100 text-red-700 text-sm font-medium px-3 py-1 rounded-full">高風險 ${high} 項</span>` : ''}
+      ${med ? `<span class="bg-amber-100 text-amber-700 text-sm font-medium px-3 py-1 rounded-full">中風險 ${med} 項</span>` : ''}
+      ${low ? `<span class="bg-blue-100 text-blue-700 text-sm font-medium px-3 py-1 rounded-full">低風險 ${low} 項</span>` : ''}
+    </div>
+    ${findings.map((f, i) => `
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden risk-${f.risk_level}">
+      <details>
+        <summary class="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-gray-50 select-none list-none">
+          <span class="text-sm font-bold text-gray-400 shrink-0">F${i + 1}</span>
+          <span class="badge-${f.risk_level} text-xs font-semibold px-2.5 py-1 rounded-full shrink-0">${f.risk_level}</span>
+          <span class="font-medium text-gray-900 text-sm flex-1">${escHtml(f.title)}</span>
+          <span class="text-xs text-gray-400 shrink-0">${escHtml(f.regulatory_reference || '')}</span>
+          <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-5 pb-5 pt-2 space-y-4 border-t border-gray-100">
+          <div class="grid grid-cols-1 gap-4">
+            <div>
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">現況 (Condition)</p>
+              <p class="text-sm text-gray-700">${escHtml(f.condition || '')}</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">準則 (Criteria)</p>
+              <p class="text-sm text-gray-700">${escHtml(f.criteria || '')}</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-1">原因 (Cause)</p>
+              <p class="text-sm text-gray-700">${escHtml(f.cause || '')}</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1">影響 (Effect)</p>
+              <p class="text-sm text-gray-700">${escHtml(f.effect || '')}</p>
+            </div>
+            <div class="bg-green-50 rounded-lg p-3">
+              <p class="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">建議 (Recommendation)</p>
+              <p class="text-sm text-green-800">${escHtml(f.recommendation || '')}</p>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+    `).join('')}
+  `;
+}
+
+// ─── Utility ─────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function startNewAudit() {
+  S.sessionId = null;
+  S.frameworks = [];
+  S.questions = [];
+  S.responses = {};
+  S.findings = null;
+  document.getElementById('scope-input').value = '';
+  document.getElementById('context-input').value = '';
+  document.getElementById('scope-count').textContent = '0 字';
+  document.getElementById('context-count').textContent = '0 字';
+  document.getElementById('resp-level').value = '';
+  renderFrameworks();
+  goToStep(1);
+}
+</script>
+</body>
+</html>
