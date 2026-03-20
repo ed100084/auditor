@@ -221,9 +221,9 @@ async def stream_findings(session: dict):
         '{"executive_summary":"string","findings":['
         '{"title":"string","risk_level":"High|Medium|Low",'
         '"regulatory_reference":"string","legal_basis":"string",'
-        '"condition":"string","criteria":"string","cause":"string",'
-        '"effect":"string","recommendation":"string",'
-        '"action_items":"string"}]}'
+        '"legal_requirement":"string","condition":"string",'
+        '"criteria":"string","cause":"string","effect":"string",'
+        '"recommendation":"string"}]}'
     )
     system_prompt = "\n".join([
         "你是一位資深資通安全稽核委員，負責撰寫正式稽核發現報告。",
@@ -233,17 +233,18 @@ async def stream_findings(session: dict):
         "- 僅輸出純 JSON object，不含 markdown、說明文字或其他內容",
         f"- 格式：{json_schema}",
         "- executive_summary：繁體中文，2-3 段，適合機關首長閱覽",
+        "- legal_basis：法源依據，列出所有適用的具體法條全名（條號層級）",
+        "  範例：「資通安全管理法第18條第1項、資通安全責任等級分級辦法第7條第1項」",
+        "  若適用多個法條請以頓號（、）連接",
+        "- legal_requirement：應辦事項，直接引用法條原文中規定義務的段落",
+        "  即法條中「機關應…」、「應辦理…」、「不得…」等強制規定的原文文字",
+        "  若涉及多條法規，分段列出各條文的義務原文",
+        "  範例：「資通安全管理法第18條：各機關辦理資通安全稽核，應就資通安全政策…」",
         "- condition：現況，稽核發現的具體事實（引用受稽單位回覆為佐證）",
-        "- criteria：準則，適用法規或標準的具體要求內容",
+        "- criteria：準則，以白話說明本項應達到的合規狀態（非法條原文）",
         "- cause：原因，造成落差的根本原因（制度面、人員面、技術面）",
         "- effect：影響，可能造成的風險或損害（具體描述）",
-        "- recommendation：建議，改善方向與最佳實踐建議",
-        "- legal_basis：法源依據，列出所有適用的具體法條全名",
-        "  範例：「資通安全管理法第18條第1項、資通安全責任等級分級辦法第7條」",
-        "  若適用多個法條請以頓號（、）連接",
-        "- action_items：應辦事項，條列式必辦清單，每項須含：",
-        "  ① 具體行動（動詞開頭）② 建議完成期限 ③ 主辦單位/人員",
-        "  範例：「1. 訂定資訊安全政策書面文件並經主管核定（建議期限：1個月內，主辦：資安人員）\\n2. ...」",
+        "- recommendation：建議改善事項，稽核委員針對缺失提出的具體改善措施與建議完成期限",
         "",
         "風險等級判定：",
         "- High：可能立即造成資安事件、法律責任或重大營運影響",
@@ -253,7 +254,8 @@ async def stream_findings(session: dict):
         "重要原則：",
         "- 僅針對有具體證據支持的問題產生發現",
         "- 若回覆顯示已完全符合要求，不產生該項發現",
-        "- regulatory_reference 為簡短引用（放標題旁），legal_basis 為完整條文全名",
+        "- regulatory_reference 為簡短引用（標題旁顯示），legal_basis 為完整條文全名",
+        "- legal_requirement 必須是法條原文，不可改寫或摘要",
         "- 發現依風險等級由高至低排序",
     ])
 

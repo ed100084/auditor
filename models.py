@@ -15,12 +15,12 @@ class Finding(BaseModel):
     risk_level: str             # "High" | "Medium" | "Low"
     regulatory_reference: str   # e.g. "資通安全管理法第18條、ISO 27001 A.15.1"
     legal_basis: str            # 法源依據 — 具體條文全名，e.g. "資通安全管理法第18條第1項"
+    legal_requirement: str      # 應辦事項 — 法條原文中「應…」的義務段落
     condition: str              # 現況 — 稽核中發現的事實
     criteria: str               # 準則 — 應達到的法規/標準要求
     cause: str                  # 原因 — 造成落差的根本原因
     effect: str                 # 影響 — 可能造成的風險或損害
-    recommendation: str         # 建議 — 具體改善措施與期限
-    action_items: str           # 應辦事項 — 條列式必辦清單，含責任人與建議期限
+    recommendation: str         # 建議改善事項 — 稽核委員的具體改善建議與期限
 
 
 class FindingsReport(BaseModel):
