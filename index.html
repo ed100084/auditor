@@ -485,10 +485,11 @@ function renderQuestions() {
         <div class="flex-1">
           <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent"
             rows="2" onchange="updateQuestionText('${q.id}', this.value)">${escHtml(q.text)}</textarea>
-          <div class="flex items-center gap-2 mt-2">
+          <div class="flex items-center gap-2 mt-2 flex-wrap">
             <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${escHtml(q.category)}</span>
             <span class="text-xs text-gray-400">${escHtml(q.source_framework)}</span>
             ${q.reference ? `<span class="text-xs text-blue-500">${escHtml(q.reference)}</span>` : ''}
+            ${q.dimension ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(q.dimension)}</span>` : ''}
           </div>
         </div>
         <button onclick="removeQuestion('${q.id}')" class="text-gray-300 hover:text-red-400 transition-colors mt-1 shrink-0">
@@ -550,8 +551,9 @@ function renderResponses() {
         <span class="text-xs font-bold text-blue-600 shrink-0 mt-0.5">Q${i + 1}</span>
         <div>
           <p class="text-sm font-medium text-gray-800">${escHtml(q.text)}</p>
-          <div class="flex gap-2 mt-1">
+          <div class="flex gap-2 mt-1 flex-wrap">
             <span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">${escHtml(q.category)}</span>
+            ${q.dimension ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(q.dimension)}</span>` : ''}
             ${q.reference ? `<span class="text-xs text-blue-400">${escHtml(q.reference)}</span>` : ''}
           </div>
         </div>
@@ -715,6 +717,19 @@ function renderFindings() {
 }
 
 // ─── Utility ─────────────────────────────────────────────────
+function dimensionStyle(dim) {
+  const map = {
+    'P': 'bg-blue-100 text-blue-800',
+    'D': 'bg-green-100 text-green-800',
+    'C': 'bg-yellow-100 text-yellow-800',
+    'A': 'bg-purple-100 text-purple-800',
+    '證據': 'bg-orange-100 text-orange-800',
+    '例外': 'bg-red-100 text-red-800',
+    '意識': 'bg-pink-100 text-pink-800',
+  };
+  return map[dim] || 'bg-gray-100 text-gray-700';
+}
+
 function escHtml(str) {
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
