@@ -49,7 +49,8 @@
 | 前端 | 純 HTML + Tailwind CSS（CDN），無框架 |
 | 部署-後端 | Azure App Service (Linux, Python 3.11) |
 | 部署-前端 | GitHub Pages（`static/index.html` → 由 CI 自動部署） |
-| 串流 | Server-Sent Events (SSE) |
+| 串流 | Server-Sent Events (SSE)，真正 LLM streaming（threading + asyncio.Queue） |
+| Session 儲存 | SQLite (`data/auditor.db`)，重啟不清除 |
 | 資料驗證 | Pydantic v1 |
 
 ---
@@ -143,7 +144,7 @@ auditor/
 ├── config.py             # 環境變數設定 (Pydantic BaseSettings)
 ├── models.py             # Pydantic 資料模型
 ├── llm_service.py        # LLM 呼叫邏輯、Prompt、JSON 修復
-├── session_store.py      # In-memory session 儲存
+├── session_store.py      # SQLite session 持久化 (data/auditor.db)
 ├── dependencies/
 │   └── auth.py           # API Key 認證 dependency
 ├── frameworks/
@@ -159,9 +160,30 @@ auditor/
 
 ---
 
+## 執行測試
+
+```bash
+pip install pytest httpx
+pytest tests/ -v
+```
+
+覆蓋範圍：
+
+| 測試檔案 | 說明 |
+|----------|------|
+| `tests/test_session_store.py` | SQLite CRUD：建立、讀取、更新、刪除 session（10 個案例） |
+| `tests/test_frameworks.py` | FRAMEWORK_REGISTRY 完整性：6 個框架、欄位完整、文字非空 |
+| `tests/test_models.py` | Pydantic model 序列化/反序列化：Question、Finding、GovFinding 等 |
+| `tests/test_auth.py` | API Key middleware：正確 key 通過、錯誤 key 401、無 key 401 |
+
+> **注意**：本機若安裝 pydantic v2（而非 requirements.txt 指定的 v1），`conftest.py` 會自動以 mock 替代 `config.settings`，auth 測試仍可正常執行。
+
+---
+
 ## 注意事項
 
-- Session 資料存於記憶體，伺服器重啟後清除，不適合多人共用長期使用
+- Session 資料持久化至 `data/auditor.db`（SQLite），伺服器重啟不清除，適合正式使用
+- `data/auditor.db` 已加入 `.gitignore`，不會提交至版本控制
 - LLM 產生的法條引用與原文為 AI 生成，使用前請人工核對法規正確性
 - `.env` 已加入 `.gitignore`，請勿將 API 金鑰提交至版本控制
 - `AUDITOR_API_KEY` 未設定時每次重啟會產生新的隨機金鑰，前端需重新輸入；生產環境請明確設定固定值

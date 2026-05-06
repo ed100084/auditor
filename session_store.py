@@ -1,38 +1,129 @@
+import json
+import sqlite3
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Optional
+
+DB_PATH = Path(__file__).parent / "data" / "auditor.db"
+
+_JSON_FIELDS = ("questions", "responses", "findings", "frameworks")
 
 
-_sessions: Dict[str, dict] = {}
+@contextmanager
+def _db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    # 啟動時自動建表（idempotent）
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            session_id            TEXT PRIMARY KEY,
+            framework_id          TEXT,
+            responsibility_level  TEXT,
+            questions             TEXT NOT NULL DEFAULT '[]',
+            responses             TEXT NOT NULL DEFAULT '[]',
+            findings              TEXT,
+            frameworks            TEXT NOT NULL DEFAULT '[]',
+            custom_framework_text TEXT NOT NULL DEFAULT '',
+            scope                 TEXT NOT NULL DEFAULT '',
+            context               TEXT NOT NULL DEFAULT '',
+            created_at            TEXT NOT NULL,
+            updated_at            TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _row_to_dict(row) -> dict:
+    d = dict(row)
+    for field in _JSON_FIELDS:
+        if field in d and d[field] is not None:
+            d[field] = json.loads(d[field])
+        elif field in d:
+            d[field] = [] if field != "findings" else None
+    return d
 
 
 def create_session() -> str:
     session_id = str(uuid.uuid4())
-    _sessions[session_id] = {
-        "session_id": session_id,
-        "created_at": datetime.utcnow().isoformat(),
-        "frameworks": [],
-        "responsibility_level": None,
-        "custom_framework_text": "",
-        "scope": "",
-        "context": "",
-        "questions": [],
-        "responses": [],
-        "findings": None,
-    }
+    now = datetime.utcnow().isoformat()
+    with _db() as conn:
+        conn.execute(
+            """
+            INSERT INTO sessions (
+                session_id, framework_id, responsibility_level,
+                questions, responses, findings,
+                frameworks, custom_framework_text, scope, context,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (session_id, None, None, "[]", "[]", None, "[]", "", "", "", now, now),
+        )
     return session_id
 
 
 def get_session(session_id: str) -> Optional[dict]:
-    return _sessions.get(session_id)
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    return _row_to_dict(row)
 
 
 def update_session(session_id: str, data: dict) -> bool:
-    if session_id not in _sessions:
+    current = get_session(session_id)
+    if current is None:
         return False
-    _sessions[session_id].update(data)
+    current.update(data)
+    now = datetime.utcnow().isoformat()
+    with _db() as conn:
+        conn.execute(
+            """
+            UPDATE sessions SET
+                framework_id          = ?,
+                responsibility_level  = ?,
+                questions             = ?,
+                responses             = ?,
+                findings              = ?,
+                frameworks            = ?,
+                custom_framework_text = ?,
+                scope                 = ?,
+                context               = ?,
+                updated_at            = ?
+            WHERE session_id = ?
+            """,
+            (
+                current.get("framework_id"),
+                current.get("responsibility_level"),
+                json.dumps(current.get("questions", [])),
+                json.dumps(current.get("responses", [])),
+                json.dumps(current["findings"]) if current.get("findings") is not None else None,
+                json.dumps(current.get("frameworks", [])),
+                current.get("custom_framework_text", ""),
+                current.get("scope", ""),
+                current.get("context", ""),
+                now,
+                session_id,
+            ),
+        )
     return True
 
 
 def delete_session(session_id: str) -> bool:
-    return bool(_sessions.pop(session_id, None))
+    with _db() as conn:
+        cursor = conn.execute(
+            "DELETE FROM sessions WHERE session_id = ?", (session_id,)
+        )
+        return cursor.rowcount > 0

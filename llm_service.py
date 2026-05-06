@@ -1,6 +1,8 @@
+import asyncio
 import json
 import logging
 import re
+import threading
 import time
 import uuid
 from typing import List
@@ -199,6 +201,79 @@ async def generate_questions(
     return questions
 
 
+async def _stream_sse(msgs: list, max_tokens: int, temperature: float):
+    """真正的 LLM streaming：逐 token 透過 SSE 推送給前端。
+    以 daemon thread 執行 Azure streaming call，透過 asyncio.Queue 橋接到 async generator。
+    JSON 截斷時透過 repair 事件通知前端替換 buffer，_repair_truncated_json 作為 fallback。
+    """
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def _run_stream():
+        try:
+            # 初始請求失敗時（429/503）自動重試；mid-stream 錯誤直接傳遞
+            response = _call_with_retry(lambda: _get_client().complete(
+                messages=msgs,
+                model=settings.AZURE_AI_MODEL,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True,
+            ))
+            finish_reason = None
+            for update in response:
+                if update.choices:
+                    choice = update.choices[0]
+                    if choice.delta and choice.delta.content:
+                        token = choice.delta.content
+                        asyncio.run_coroutine_threadsafe(
+                            queue.put(("token", token)), loop
+                        ).result(timeout=30)
+                    if choice.finish_reason:
+                        finish_reason = str(choice.finish_reason)
+            asyncio.run_coroutine_threadsafe(
+                queue.put(("done", finish_reason)), loop
+            ).result(timeout=5)
+        except Exception as exc:
+            asyncio.run_coroutine_threadsafe(
+                queue.put(("error", exc)), loop
+            ).result(timeout=5)
+
+    thread = threading.Thread(target=_run_stream, daemon=True)
+    thread.start()
+
+    buffer = []
+    finish_reason = None
+
+    while True:
+        kind, value = await asyncio.wait_for(queue.get(), timeout=120)
+        if kind == "error":
+            raise value
+        if kind == "done":
+            finish_reason = value
+            break
+        # kind == "token"
+        buffer.append(value)
+        yield f"data: {json.dumps({'chunk': value})}\n\n"
+
+    thread.join(timeout=5)
+
+    if finish_reason and finish_reason not in ("stop",):
+        logger.warning(f"LLM finish_reason={finish_reason}，嘗試修復 JSON")
+
+    raw = _strip_json_fences("".join(buffer))
+    try:
+        json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            repaired = _repair_truncated_json(raw)
+            logger.warning("JSON 已修復，透過 repair 事件通知前端替換 buffer")
+            yield f"data: {json.dumps({'repair': repaired})}\n\n"
+        except ValueError:
+            logger.error("JSON 修復失敗，前端將顯示重試提示")
+
+    yield "data: [DONE]\n\n"
+
+
 async def stream_findings(session: dict):
     framework_ids = session.get("frameworks", [])
     custom_text = session.get("custom_framework_text", "")
@@ -268,28 +343,7 @@ async def stream_findings(session: dict):
     )
 
     msgs = [SystemMessage(content=system_prompt), UserMessage(content=user_message)]
-    response = await run_in_threadpool(
-        lambda: _call_with_retry(lambda: _get_client().complete(
-            messages=msgs,
-            model=settings.AZURE_AI_MODEL,
-            max_tokens=8192,
-            temperature=0.2,
-        ))
-    )
-    raw = response.choices[0].message.content
-    if not raw:
-        raise ValueError(f"模型回傳空內容 (finish_reason={getattr(response.choices[0], 'finish_reason', 'N/A')})")
-    raw = _strip_json_fences(raw)
-    raw = _repair_truncated_json(raw)
-
-    async def _generate():
-        # 分批 yield 模擬 streaming 效果（每 50 字一批）
-        chunk_size = 50
-        for i in range(0, len(raw), chunk_size):
-            yield f"data: {json.dumps({'chunk': raw[i:i+chunk_size]})}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return _generate()
+    return _stream_sse(msgs, max_tokens=8192, temperature=0.2)
 
 
 async def stream_gov_findings(session: dict):
@@ -361,24 +415,4 @@ async def stream_gov_findings(session: dict):
     )
 
     msgs = [SystemMessage(content=system_prompt), UserMessage(content=user_message)]
-    response = await run_in_threadpool(
-        lambda: _call_with_retry(lambda: _get_client().complete(
-            messages=msgs,
-            model=settings.AZURE_AI_MODEL,
-            max_tokens=8192,
-            temperature=0.2,
-        ))
-    )
-    raw = response.choices[0].message.content
-    if not raw:
-        raise ValueError(f"模型回傳空內容 (finish_reason={getattr(response.choices[0], 'finish_reason', 'N/A')})")
-    raw = _strip_json_fences(raw)
-    raw = _repair_truncated_json(raw)
-
-    async def _generate():
-        chunk_size = 50
-        for i in range(0, len(raw), chunk_size):
-            yield f"data: {json.dumps({'chunk': raw[i:i+chunk_size]})}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return _generate()
+    return _stream_sse(msgs, max_tokens=8192, temperature=0.2)

@@ -675,7 +675,8 @@ function streamFindings(format) {
     }
     try {
       const parsed = JSON.parse(e.data);
-      buffer += parsed.chunk || '';
+      if (parsed.repair) buffer = parsed.repair;
+      else buffer += parsed.chunk || '';
     } catch (_) {}
   };
 
