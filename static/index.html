@@ -245,6 +245,19 @@
 // ─── Configuration ───────────────────────────────────────────
 const API_BASE = "https://secauditor.azurewebsites.net";
 
+// ─── API Key ─────────────────────────────────────────────────
+// 從 localStorage 讀取；首次使用時以 prompt() 輸入並儲存
+function getApiKey() {
+  let k = localStorage.getItem('auditor_api_key');
+  if (!k) {
+    k = prompt('請輸入 API Key（向管理員取得）：') || '';
+    if (k) localStorage.setItem('auditor_api_key', k);
+  }
+  return k;
+}
+// 啟動時確保 key 存在
+const _apiKey = getApiKey();
+
 // ─── App State ───────────────────────────────────────────────
 const S = {
   sessionId: null,
@@ -265,7 +278,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ─── API Helper ──────────────────────────────────────────────
 async function api(method, path, body) {
-  const opts = { method, headers: {} };
+  const opts = { method, headers: { 'X-API-Key': getApiKey() } };
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -281,7 +294,11 @@ async function api(method, path, body) {
 async function apiUpload(path, file) {
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch(`${API_BASE}/api${path}`, { method: 'POST', body: fd });
+  const res = await fetch(`${API_BASE}/api${path}`, {
+    method: 'POST',
+    headers: { 'X-API-Key': getApiKey() },
+    body: fd,
+  });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -636,7 +653,7 @@ async function goStep4Next() {
 // ─── STEP 5: Findings (SSE) ───────────────────────────────────
 function streamFindings(format) {
   const fmt = format || 'iia5c';
-  const evtSource = new EventSource(`${API_BASE}/api/sessions/${S.sessionId}/findings/stream?format=${fmt}`);
+  const evtSource = new EventSource(`${API_BASE}/api/sessions/${S.sessionId}/findings/stream?format=${fmt}&api_key=${encodeURIComponent(getApiKey())}`);
   let buffer = '';
 
   evtSource.onmessage = (e) => {

@@ -48,7 +48,7 @@
 | LLM | Azure AI Foundry (`azure-ai-inference` SDK) |
 | 前端 | 純 HTML + Tailwind CSS（CDN），無框架 |
 | 部署-後端 | Azure App Service (Linux, Python 3.11) |
-| 部署-前端 | GitHub Pages (`index.html` at repo root) |
+| 部署-前端 | GitHub Pages（`static/index.html` → 由 CI 自動部署） |
 | 串流 | Server-Sent Events (SSE) |
 | 資料驗證 | Pydantic v1 |
 
@@ -91,6 +91,7 @@ pip install -r requirements.txt
 AZURE_AI_ENDPOINT=https://<your-endpoint>.inference.ai.azure.com
 AZURE_AI_KEY=<your-api-key>
 AZURE_AI_MODEL=<model-deployment-name>
+AUDITOR_API_KEY=<自訂 API 金鑰，若不設則每次啟動自動產生隨機 UUID>
 ALLOWED_ORIGINS=http://localhost:8000
 ```
 
@@ -121,13 +122,16 @@ gunicorn -w 2 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000 --ti
 | `AZURE_AI_ENDPOINT` | Azure AI Foundry 端點 URL |
 | `AZURE_AI_KEY` | API 金鑰 |
 | `AZURE_AI_MODEL` | 模型部署名稱 |
+| `AUDITOR_API_KEY` | 前端存取 API 的金鑰（若不設則每次重啟自動產生隨機 UUID，**建議生產環境明確設定**） |
 | `ALLOWED_ORIGINS` | `https://ed100084.github.io` |
+
+> **前端 API Key 設定**：使用者首次開啟 GitHub Pages 網頁時，會彈出提示輸入 API Key（存入 `localStorage`，後續自動使用）。API Key 須與後端 `AUDITOR_API_KEY` 一致。
 
 ### 前端 — GitHub Pages
 
-Repository Settings → Pages → Branch: `main`，資料夾: `/ (root)`
+Repository Settings → Pages → **Source: GitHub Actions**
 
-`index.html`（repo 根目錄）即為前端入口，與 `static/index.html` 保持同步。
+推送到 `main` 分支時，`.github/workflows/pages.yml` 會自動將 `static/index.html` 複製並部署至 GitHub Pages，無需手動維護 root 層的 `index.html`。
 
 ---
 
@@ -140,12 +144,16 @@ auditor/
 ├── models.py             # Pydantic 資料模型
 ├── llm_service.py        # LLM 呼叫邏輯、Prompt、JSON 修復
 ├── session_store.py      # In-memory session 儲存
+├── dependencies/
+│   └── auth.py           # API Key 認證 dependency
 ├── frameworks/
 │   └── __init__.py       # 法規框架文字與 compact 摘要
 ├── routers/              # FastAPI 路由
 ├── static/
-│   └── index.html        # 前端單頁應用
-├── index.html            # GitHub Pages 入口（同步自 static/）
+│   └── index.html        # 前端單頁應用（同時作為 GitHub Pages 來源）
+├── .github/workflows/
+│   ├── main_secauditor.yml  # Azure App Service CI/CD
+│   └── pages.yml            # GitHub Pages 自動部署
 └── requirements.txt
 ```
 
@@ -156,3 +164,4 @@ auditor/
 - Session 資料存於記憶體，伺服器重啟後清除，不適合多人共用長期使用
 - LLM 產生的法條引用與原文為 AI 生成，使用前請人工核對法規正確性
 - `.env` 已加入 `.gitignore`，請勿將 API 金鑰提交至版本控制
+- `AUDITOR_API_KEY` 未設定時每次重啟會產生新的隨機金鑰，前端需重新輸入；生產環境請明確設定固定值

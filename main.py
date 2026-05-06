@@ -1,11 +1,12 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
+from dependencies.auth import verify_api_key
 from routers import session, framework, questions, responses, findings
 
 app = FastAPI(title="資安稽核助手 API", version="1.0.0")
@@ -20,16 +21,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
-app.include_router(session.router, prefix="/api")
-app.include_router(framework.router, prefix="/api")
-app.include_router(questions.router, prefix="/api")
-app.include_router(responses.router, prefix="/api")
-app.include_router(findings.router, prefix="/api")
+# Auth dependency applied to all /api/ routes
+api_auth = [Depends(verify_api_key)]
 
-# Framework list endpoint (not session-scoped)
-from routers.framework import list_frameworks
-app.get("/api/frameworks")(list_frameworks)
+app.include_router(framework.list_router, prefix="/api", dependencies=api_auth)
+app.include_router(session.router, prefix="/api", dependencies=api_auth)
+app.include_router(framework.router, prefix="/api", dependencies=api_auth)
+app.include_router(questions.router, prefix="/api", dependencies=api_auth)
+app.include_router(responses.router, prefix="/api", dependencies=api_auth)
+app.include_router(findings.router, prefix="/api", dependencies=api_auth)
 
 # Serve static frontend
 static_dir = os.path.join(os.path.dirname(__file__), "static")

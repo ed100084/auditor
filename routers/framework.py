@@ -8,10 +8,13 @@ from frameworks import FRAMEWORK_REGISTRY
 from models import FrameworkSelection
 from session_store import get_session, update_session
 
+# Non-session-scoped endpoint for listing available frameworks
+list_router = APIRouter(tags=["framework"])
+
 router = APIRouter(prefix="/sessions", tags=["framework"])
 
 
-@router.get("/frameworks")
+@list_router.get("/frameworks")
 def list_frameworks():
     return [
         {
