@@ -48,7 +48,7 @@ def test_question_dict_round_trip():
         "reference": "A.8.2",
     }
     q = Question(**data)
-    assert q.dict() == data
+    assert q.model_dump() == data
 
 
 # ─── Finding ─────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ def test_findings_report_serialization():
         executive_summary="整體資安狀況須改善。",
         findings=[],
     )
-    d = report.dict()
+    d = report.model_dump()
     assert d["executive_summary"] == "整體資安狀況須改善。"
     assert d["findings"] == []
 
@@ -123,7 +123,7 @@ def test_gov_findings_report_serialization():
         executive_summary="政府機關稽核總結",
         findings=[],
     )
-    d = report.dict()
+    d = report.model_dump()
     assert d["findings"] == []
 
 

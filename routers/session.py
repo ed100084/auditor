@@ -1,13 +1,23 @@
-from fastapi import APIRouter, HTTPException
-from session_store import create_session, get_session, delete_session
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
+
+from models import SessionCreate
+from session_store import create_session, get_session, delete_session, list_sessions
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("")
-def new_session():
-    session_id = create_session()
-    return {"session_id": session_id}
+def new_session(body: Optional[SessionCreate] = None):
+    user_name = body.user_name if body else ""
+    session_id = create_session(user_name=user_name)
+    return {"session_id": session_id, "user_name": user_name}
+
+
+@router.get("")
+def list_sessions_endpoint(user: Optional[str] = Query(None)):
+    return list_sessions(user_name=user)
 
 
 @router.get("/{session_id}")

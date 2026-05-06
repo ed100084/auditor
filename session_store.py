@@ -30,9 +30,15 @@ def _db():
             scope                 TEXT NOT NULL DEFAULT '',
             context               TEXT NOT NULL DEFAULT '',
             created_at            TEXT NOT NULL,
-            updated_at            TEXT NOT NULL
+            updated_at            TEXT NOT NULL,
+            user_name             TEXT NOT NULL DEFAULT ''
         )
     """)
+    # 遷移：若舊表缺少 user_name 欄位則自動補上
+    try:
+        conn.execute("ALTER TABLE sessions ADD COLUMN user_name TEXT NOT NULL DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # 欄位已存在
     conn.commit()
     try:
         yield conn
@@ -54,7 +60,7 @@ def _row_to_dict(row) -> dict:
     return d
 
 
-def create_session() -> str:
+def create_session(user_name: str = "") -> str:
     session_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat()
     with _db() as conn:
@@ -64,10 +70,10 @@ def create_session() -> str:
                 session_id, framework_id, responsibility_level,
                 questions, responses, findings,
                 frameworks, custom_framework_text, scope, context,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, updated_at, user_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, None, None, "[]", "[]", None, "[]", "", "", "", now, now),
+            (session_id, None, None, "[]", "[]", None, "[]", "", "", "", now, now, user_name),
         )
     return session_id
 
@@ -80,6 +86,22 @@ def get_session(session_id: str) -> Optional[dict]:
     if row is None:
         return None
     return _row_to_dict(row)
+
+
+def list_sessions(user_name: Optional[str] = None) -> list:
+    with _db() as conn:
+        if user_name is not None:
+            rows = conn.execute(
+                "SELECT session_id, scope, created_at, updated_at, user_name "
+                "FROM sessions WHERE user_name = ? ORDER BY created_at DESC",
+                (user_name,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT session_id, scope, created_at, updated_at, user_name "
+                "FROM sessions ORDER BY created_at DESC"
+            ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def update_session(session_id: str, data: dict) -> bool:

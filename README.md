@@ -16,42 +16,40 @@
 | 2️⃣ 設定稽核範圍 | 輸入受稽單位、稽核背景與責任等級 |
 | 3️⃣ AI 產生稽核問題 | 依 PDCA 多維度框架自動產生 18–25 題，標示維度標籤（P/D/C/A/證據/例外/意識） |
 | 4️⃣ 輸入受稽單位回覆 | 逐題填入問答紀錄 |
-| 5️⃣ AI 產生稽核發現報告 | 自動生成 IIA 5C 格式報告，含法源依據、應辦事項（法條原文）及建議改善事項 |
+| 5️⃣ AI 產生稽核發現報告 | 自動生成 IIA 5C 或政府機關 CI 格式報告，含法源依據、應辦事項（法條原文）及建議改善事項 |
 
-**稽核發現報告欄位（IIA 5C + 法規延伸）：**
+**我的稽核紀錄（多租戶）：**
 
-- **法源依據** — 違反的具體法條名稱與條號
-- **應辦事項** — 法條原文中強制義務段落（「機關應…」原文）
-- **現況** (Condition) — 稽核發現的具體事實
-- **準則** (Criteria) — 應達到的合規狀態
-- **原因** (Cause) — 落差的根本原因
-- **影響** (Effect) — 可能造成的風險或損害
-- **建議改善事項** (Recommendation) — 具體改善措施與建議期限
+- 右上角輸入稽核員姓名（存入 `localStorage`）
+- 建立 Session 時自動帶上使用者名稱
+- 點擊「我的紀錄」可查看個人歷史稽核清單
 
 ---
 
 ## 技術架構
 
 ```
-前端 (GitHub Pages)          後端 (Azure App Service)
-┌─────────────────────┐      ┌──────────────────────────┐
-│  static/index.html  │ ───► │  FastAPI + Uvicorn        │
-│  單頁五步驟精靈      │      │  llm_service.py           │
-│  Tailwind CSS       │ ◄─── │  Azure AI Foundry (LLM)   │
-│  SSE 串流接收        │      │  In-memory session store  │
-└─────────────────────┘      └──────────────────────────┘
+前端 (GitHub Pages)               後端 (Azure App Service)
+┌──────────────────────────┐      ┌──────────────────────────┐
+│  static/index.html        │ ───► │  FastAPI + Uvicorn        │
+│  static/js/main.js       │      │  llm_service.py           │
+│  static/js/api.js        │ ◄─── │  Azure AI Foundry (LLM)   │
+│  static/js/ui.js         │      │  SQLite session store     │
+│  static/js/state.js      │      └──────────────────────────┘
+│  static/css/app.css      │
+└──────────────────────────┘
 ```
 
 | 項目 | 技術 |
 |------|------|
 | 後端框架 | Python FastAPI + Uvicorn / Gunicorn |
 | LLM | Azure AI Foundry (`azure-ai-inference` SDK) |
-| 前端 | 純 HTML + Tailwind CSS（CDN），無框架 |
+| 前端 | 純 HTML + Tailwind CSS（CDN）+ ES Modules |
 | 部署-後端 | Azure App Service (Linux, Python 3.11) |
-| 部署-前端 | GitHub Pages（`static/index.html` → 由 CI 自動部署） |
+| 部署-前端 | GitHub Pages（CI 自動部署 static/ 目錄） |
 | 串流 | Server-Sent Events (SSE)，真正 LLM streaming（threading + asyncio.Queue） |
 | Session 儲存 | SQLite (`data/auditor.db`)，重啟不清除 |
-| 資料驗證 | Pydantic v1 |
+| 資料驗證 | Pydantic v2 + pydantic-settings v2 |
 
 ---
 
@@ -132,7 +130,7 @@ gunicorn -w 2 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000 --ti
 
 Repository Settings → Pages → **Source: GitHub Actions**
 
-推送到 `main` 分支時，`.github/workflows/pages.yml` 會自動將 `static/index.html` 複製並部署至 GitHub Pages，無需手動維護 root 層的 `index.html`。
+推送到 `main` 分支時，`.github/workflows/pages.yml` 會自動將 `static/` 目錄（index.html、css/、js/）部署至 GitHub Pages。
 
 ---
 
@@ -141,20 +139,37 @@ Repository Settings → Pages → **Source: GitHub Actions**
 ```
 auditor/
 ├── main.py               # FastAPI app、CORS、路由掛載
-├── config.py             # 環境變數設定 (Pydantic BaseSettings)
-├── models.py             # Pydantic 資料模型
+├── config.py             # 環境變數設定 (pydantic-settings v2)
+├── models.py             # Pydantic v2 資料模型
 ├── llm_service.py        # LLM 呼叫邏輯、Prompt、JSON 修復
-├── session_store.py      # SQLite session 持久化 (data/auditor.db)
+├── session_store.py      # SQLite session 持久化 (data/auditor.db)，含 user_name
 ├── dependencies/
 │   └── auth.py           # API Key 認證 dependency
 ├── frameworks/
 │   └── __init__.py       # 法規框架文字與 compact 摘要
 ├── routers/              # FastAPI 路由
+│   ├── session.py        # POST/GET /sessions（含 ?user= 篩選）、GET/DELETE /{id}
+│   ├── framework.py
+│   ├── questions.py
+│   ├── responses.py
+│   └── findings.py
 ├── static/
-│   └── index.html        # 前端單頁應用（同時作為 GitHub Pages 來源）
+│   ├── index.html        # 前端 HTML（僅結構，引入 module）
+│   ├── css/app.css       # 應用樣式
+│   └── js/
+│       ├── main.js       # 初始化、事件綁定、全域函式
+│       ├── api.js        # API 呼叫、SSE、API Key / 使用者名稱管理
+│       ├── ui.js         # 渲染函式（框架、問題、回覆、發現報告、歷史紀錄）
+│       └── state.js      # App 狀態物件
 ├── .github/workflows/
 │   ├── main_secauditor.yml  # Azure App Service CI/CD
-│   └── pages.yml            # GitHub Pages 自動部署
+│   └── pages.yml            # GitHub Pages 自動部署（含 css/ js/）
+├── tests/
+│   ├── conftest.py
+│   ├── test_session_store.py  # 17 個測試（含 user_name / list_sessions）
+│   ├── test_frameworks.py     # 10 個測試
+│   ├── test_models.py         # 12 個測試
+│   └── test_auth.py           # 7 個測試（共 45 個）
 └── requirements.txt
 ```
 
@@ -163,20 +178,18 @@ auditor/
 ## 執行測試
 
 ```bash
-pip install pytest httpx
+pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-覆蓋範圍：
+覆蓋範圍（45 個測試）：
 
-| 測試檔案 | 說明 |
-|----------|------|
-| `tests/test_session_store.py` | SQLite CRUD：建立、讀取、更新、刪除 session（10 個案例） |
-| `tests/test_frameworks.py` | FRAMEWORK_REGISTRY 完整性：6 個框架、欄位完整、文字非空 |
-| `tests/test_models.py` | Pydantic model 序列化/反序列化：Question、Finding、GovFinding 等 |
-| `tests/test_auth.py` | API Key middleware：正確 key 通過、錯誤 key 401、無 key 401 |
-
-> **注意**：本機若安裝 pydantic v2（而非 requirements.txt 指定的 v1），`conftest.py` 會自動以 mock 替代 `config.settings`，auth 測試仍可正常執行。
+| 測試檔案 | 測試數 | 說明 |
+|----------|--------|------|
+| `tests/test_session_store.py` | 17 | SQLite CRUD + user_name + list_sessions 篩選 |
+| `tests/test_frameworks.py` | 10 | FRAMEWORK_REGISTRY 完整性 |
+| `tests/test_models.py` | 12 | Pydantic v2 序列化/反序列化 |
+| `tests/test_auth.py` | 7 | API Key middleware |
 
 ---
 

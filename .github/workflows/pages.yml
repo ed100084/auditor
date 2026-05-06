@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'static/index.html'
+      - 'static/css/**'
+      - 'static/js/**'
   workflow_dispatch:
 
 permissions:
@@ -28,8 +30,10 @@ jobs:
 
       - name: Prepare site directory
         run: |
-          mkdir -p _site
+          mkdir -p _site/css _site/js
           cp static/index.html _site/index.html
+          cp static/css/app.css _site/css/
+          cp static/js/*.js _site/js/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -65,3 +65,16 @@ class GovFinding(BaseModel):
 class GovFindingsReport(BaseModel):
     executive_summary: str
     findings: List[GovFinding]
+
+
+# ─── 多租戶：Session 相關 ─────────────────────────────────────────
+class SessionCreate(BaseModel):
+    user_name: str = ""
+
+
+class SessionSummary(BaseModel):
+    session_id: str
+    scope: str
+    created_at: str
+    updated_at: str
+    user_name: str = ""
