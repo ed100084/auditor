@@ -58,16 +58,20 @@ function selectTemplate(id) {
   selectedTemplate = tmpl;
 
   // 更新框架選擇：先全部取消，再勾選範本建議的框架
-  allFrameworks.forEach(fw => {
-    const cb = document.querySelector(`.framework-checkbox[value="${fw.id}"]`);
-    if (cb) {
-      const shouldCheck = tmpl.suggested_frameworks.includes(fw.id);
-      if (cb.checked !== shouldCheck) {
-        cb.checked = shouldCheck;
-        onFrameworkChange(fw.id, shouldCheck);
+  try {
+    allFrameworks.forEach(fw => {
+      const cb = document.querySelector(`.framework-checkbox[value="${fw.id}"]`);
+      if (cb) {
+        const shouldCheck = tmpl.suggested_frameworks.includes(fw.id);
+        if (cb.checked !== shouldCheck) {
+          cb.checked = shouldCheck;
+          onFrameworkChange(fw.id, shouldCheck);
+        }
       }
-    }
-  });
+    });
+  } catch (e) {
+    console.error('selectTemplate framework update error:', e);
+  }
 
   // 更新責任等級
   const respEl = document.getElementById('resp-level');
@@ -117,6 +121,7 @@ async function loadFrameworks() {
 
 function onFrameworkChange(id, checked) {
   const box = document.querySelector(`.fw-check-${id}`);
+  if (!box) return;
   const card = box.closest('.card-body');
   if (checked) {
     S.frameworks.push(id);

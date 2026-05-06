@@ -30,7 +30,8 @@ app.include_router(framework.router, prefix="/api", dependencies=api_auth)
 app.include_router(questions.router, prefix="/api", dependencies=api_auth)
 app.include_router(responses.router, prefix="/api", dependencies=api_auth)
 app.include_router(findings.router, prefix="/api", dependencies=api_auth)
-app.include_router(templates.router, prefix="/api", dependencies=api_auth)
+# Templates are static public data — no auth required
+app.include_router(templates.router, prefix="/api")
 
 # Serve static frontend
 static_dir = os.path.join(os.path.dirname(__file__), "static")
