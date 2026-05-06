@@ -46,6 +46,15 @@ export async function apiUpload(path, file) {
   return res.json();
 }
 
+// ─── Templates API ──────────────────────────────────────────────
+export async function fetchTemplates() {
+  try {
+    return await api('GET', '/templates');
+  } catch (_) {
+    return [];
+  }
+}
+
 // ─── SSE（稽核發現串流） ─────────────────────────────────────────
 export function openSSE(sessionId, format, { onChunk, onRepair, onDone, onError }) {
   const fmt = format || 'iia5c';

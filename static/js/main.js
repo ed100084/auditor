@@ -1,14 +1,17 @@
 import { S } from './state.js';
-import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE } from './api.js';
+import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates } from './api.js';
 import {
   showLoading, hideLoading, showError,
   updateNavBar,
-  renderFrameworks, renderQuestions, renderResponses, updateRespProgress,
+  renderFrameworks, renderTemplates, highlightSelectedTemplate,
+  renderQuestions, renderResponses, updateRespProgress,
   setReportFormat, renderFindings, renderGovFindings,
   renderSessionHistory,
 } from './ui.js';
 
 let allFrameworks = [];
+let allTemplates = [];
+let selectedTemplate = null;
 
 // ─── Init ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -21,7 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     unameEl.addEventListener('change', () => setUserName(unameEl.value));
   }
 
-  await loadFrameworks();
+  await Promise.all([loadFrameworks(), loadTemplates()]);
   setupCharCounters();
 });
 
@@ -32,6 +35,67 @@ function goToStep(n) {
   S.currentStep = n;
   updateNavBar(n);
   window.scrollTo(0, 0);
+}
+
+// ─── Templates ───────────────────────────────────────────────────
+async function loadTemplates() {
+  allTemplates = await fetchTemplates();
+  renderTemplates(allTemplates);
+}
+
+function toggleTemplatePanel() {
+  const panel = document.getElementById('template-panel');
+  const arrow = document.getElementById('template-arrow');
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !isHidden);
+  arrow.style.transform = isHidden ? 'rotate(180deg)' : '';
+}
+
+function selectTemplate(id) {
+  const tmpl = allTemplates.find(t => t.id === id);
+  if (!tmpl) return;
+
+  selectedTemplate = tmpl;
+
+  // 更新框架選擇：先全部取消，再勾選範本建議的框架
+  allFrameworks.forEach(fw => {
+    const cb = document.querySelector(`.framework-checkbox[value="${fw.id}"]`);
+    if (cb) {
+      const shouldCheck = tmpl.suggested_frameworks.includes(fw.id);
+      if (cb.checked !== shouldCheck) {
+        cb.checked = shouldCheck;
+        onFrameworkChange(fw.id, shouldCheck);
+      }
+    }
+  });
+
+  // 更新責任等級
+  const respEl = document.getElementById('resp-level');
+  if (tmpl.responsibility_levels.length > 0) {
+    respEl.value = tmpl.responsibility_levels[0];
+  } else {
+    respEl.value = '';
+  }
+
+  // 預填步驟 2 的範圍與情境
+  const scopeEl = document.getElementById('scope-input');
+  const contextEl = document.getElementById('context-input');
+  const scopeCount = document.getElementById('scope-count');
+  const contextCount = document.getElementById('context-count');
+  if (scopeEl) {
+    scopeEl.value = tmpl.scope;
+    if (scopeCount) scopeCount.textContent = tmpl.scope.length + ' 字';
+  }
+  if (contextEl) {
+    contextEl.value = tmpl.context;
+    if (contextCount) contextCount.textContent = tmpl.context.length + ' 字';
+  }
+
+  highlightSelectedTemplate(id);
+
+  // 更新 banner 顯示範本名稱
+  const nameEl = document.getElementById('template-applied-name');
+  if (nameEl) nameEl.textContent = tmpl.name;
 }
 
 // ─── STEP 1: Framework ───────────────────────────────────────────
@@ -256,6 +320,16 @@ async function goStep4Next() {
   });
 }
 
+// ─── 清除範本選擇 ─────────────────────────────────────────────────
+function clearTemplate() {
+  selectedTemplate = null;
+  highlightSelectedTemplate(null);
+  document.getElementById('scope-input').value = '';
+  document.getElementById('context-input').value = '';
+  document.getElementById('scope-count').textContent = '0 字';
+  document.getElementById('context-count').textContent = '0 字';
+}
+
 // ─── 稽核歷史紀錄 ─────────────────────────────────────────────────
 async function showMyAudits() {
   const userName = getUserName();
@@ -288,6 +362,7 @@ function startNewAudit() {
   S.responses = {};
   S.findings = null;
   S.reportFormat = 'iia5c';
+  selectedTemplate = null;
   setReportFormat('iia5c');
   document.querySelectorAll('input[name="report-format"]').forEach(r => { r.checked = r.value === 'iia5c'; });
   document.getElementById('scope-input').value = '';
@@ -295,6 +370,7 @@ function startNewAudit() {
   document.getElementById('scope-count').textContent = '0 字';
   document.getElementById('context-count').textContent = '0 字';
   document.getElementById('resp-level').value = '';
+  highlightSelectedTemplate(null);
   renderFrameworks(allFrameworks);
   goToStep(1);
 }
@@ -311,7 +387,10 @@ window.addQuestion      = addQuestion;
 window.removeQuestion   = removeQuestion;
 window.updateQuestionText = updateQuestionText;
 window.updateResponse   = updateResponse;
-window.setReportFormat  = setReportFormat;
-window.startNewAudit    = startNewAudit;
-window.showMyAudits     = showMyAudits;
-window.closeHistory     = closeHistory;
+window.setReportFormat      = setReportFormat;
+window.startNewAudit        = startNewAudit;
+window.showMyAudits         = showMyAudits;
+window.closeHistory         = closeHistory;
+window.toggleTemplatePanel  = toggleTemplatePanel;
+window.selectTemplate       = selectTemplate;
+window.clearTemplate        = clearTemplate;

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from dependencies.auth import verify_api_key
-from routers import session, framework, questions, responses, findings
+from routers import session, framework, questions, responses, findings, templates
 
 app = FastAPI(title="資安稽核助手 API", version="1.0.0")
 
@@ -30,6 +30,7 @@ app.include_router(framework.router, prefix="/api", dependencies=api_auth)
 app.include_router(questions.router, prefix="/api", dependencies=api_auth)
 app.include_router(responses.router, prefix="/api", dependencies=api_auth)
 app.include_router(findings.router, prefix="/api", dependencies=api_auth)
+app.include_router(templates.router, prefix="/api", dependencies=api_auth)
 
 # Serve static frontend
 static_dir = os.path.join(os.path.dirname(__file__), "static")

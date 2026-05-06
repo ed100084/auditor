@@ -36,6 +36,64 @@ export function updateNavBar(current) {
   }
 }
 
+// ─── Templates ───────────────────────────────────────────────────
+const CATEGORY_STYLE = {
+  '資安法系列': { badge: 'bg-blue-100 text-blue-700',   border: 'border-blue-400' },
+  '醫療特化':   { badge: 'bg-green-100 text-green-700', border: 'border-green-400' },
+  '通用IT':     { badge: 'bg-gray-100 text-gray-600',   border: 'border-gray-400' },
+  'ISO':        { badge: 'bg-purple-100 text-purple-700', border: 'border-purple-400' },
+};
+
+export function renderTemplates(templates) {
+  const grid = document.getElementById('template-grid');
+  if (!grid) return;
+
+  if (!templates || templates.length === 0) {
+    grid.innerHTML = `<p class="text-sm text-gray-400 col-span-full text-center py-4">無法載入範本</p>`;
+    return;
+  }
+
+  const categories = [...new Set(templates.map(t => t.category))];
+  grid.innerHTML = categories.map(cat => {
+    const style = CATEGORY_STYLE[cat] || { badge: 'bg-gray-100 text-gray-600', border: 'border-gray-300' };
+    const items = templates.filter(t => t.category === cat);
+    return `
+      <div class="col-span-full">
+        <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded ${style.badge} mb-2">${escHtml(cat)}</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          ${items.map(t => `
+            <button type="button" id="tmpl-btn-${t.id}"
+              onclick="selectTemplate('${t.id}')"
+              class="text-left border-2 border-gray-200 rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50 transition-colors group">
+              <div class="flex items-start justify-between gap-2">
+                <span class="text-sm font-medium text-gray-800 group-hover:text-blue-700">${escHtml(t.name)}</span>
+                <span class="text-xs text-gray-400 shrink-0">~${t.estimated_questions}題</span>
+              </div>
+              <p class="text-xs text-gray-500 mt-1 line-clamp-2">${escHtml(t.description)}</p>
+            </button>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+export function highlightSelectedTemplate(templateId) {
+  document.querySelectorAll('[id^="tmpl-btn-"]').forEach(btn => {
+    btn.classList.remove('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-300');
+    btn.classList.add('border-gray-200');
+  });
+  if (templateId) {
+    const el = document.getElementById(`tmpl-btn-${templateId}`);
+    if (el) {
+      el.classList.remove('border-gray-200');
+      el.classList.add('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-300');
+    }
+    document.getElementById('template-applied-banner').classList.remove('hidden');
+  } else {
+    document.getElementById('template-applied-banner').classList.add('hidden');
+  }
+}
+
 // ─── Frameworks ──────────────────────────────────────────────────
 export function renderFrameworks(allFrameworks) {
   const container = document.getElementById('framework-list');
