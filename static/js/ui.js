@@ -1,4 +1,4 @@
-import { S } from './state.js';
+import { S } from './state.js?v=20260507c';
 
 // ─── Loading / Toast ──────────────────────────────────────────────
 export function showLoading(text = '處理中...') {
