@@ -117,6 +117,77 @@ def _build_qa_text(questions: list, responses: list) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _coerce_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return "\n".join(_coerce_text(item) for item in value if _coerce_text(item)).strip()
+    if isinstance(value, dict):
+        preferred = (
+            "text",
+            "question",
+            "question_text",
+            "content",
+            "description",
+            "title",
+        )
+        parts = [_coerce_text(value.get(key)) for key in preferred if value.get(key)]
+        return "\n".join(part for part in parts if part).strip()
+    return str(value).strip()
+
+
+def _normalize_question(raw_question: dict, index: int) -> dict:
+    if not isinstance(raw_question, dict):
+        raw_question = {"text": _coerce_text(raw_question)}
+
+    text = _coerce_text(raw_question.get("text"))
+    if not text:
+        text = _coerce_text(raw_question.get("question"))
+    if not text:
+        text = _coerce_text(raw_question.get("question_text"))
+    if not text:
+        text = _coerce_text(raw_question.get("content"))
+
+    if not text:
+        title = _coerce_text(raw_question.get("title") or raw_question.get("topic"))
+        detail = _coerce_text(
+            raw_question.get("questions")
+            or raw_question.get("items")
+            or raw_question.get("sub_questions")
+            or raw_question.get("prompts")
+        )
+        evidence = _coerce_text(
+            raw_question.get("evidence")
+            or raw_question.get("evidence_request")
+            or raw_question.get("documents")
+        )
+        text = "\n".join(part for part in (title, detail, evidence) if part).strip()
+
+    return {
+        "id": str(raw_question.get("id") or uuid.uuid4()),
+        "text": text,
+        "category": _coerce_text(raw_question.get("category")) or "治理與合規",
+        "source_framework": _coerce_text(raw_question.get("source_framework")) or _coerce_text(raw_question.get("framework")),
+        "reference": _coerce_text(raw_question.get("reference")),
+        "dimension": _coerce_text(raw_question.get("dimension")) or "systemic",
+    }
+
+
+def _normalize_questions(raw_questions: list) -> list:
+    if not isinstance(raw_questions, list):
+        raise ValueError("LLM questions response must be a JSON array")
+
+    normalized = [
+        question
+        for i, raw_question in enumerate(raw_questions, 1)
+        if (question := _normalize_question(raw_question, i)).get("text")
+    ]
+    if not normalized:
+        logger.error("LLM returned questions without usable text: %s", raw_questions)
+        raise ValueError("LLM 產生的稽核問題沒有可用的題目內容，請重新產生")
+    return normalized
+
+
 async def generate_questions(
     framework_ids: List[str],
     custom_text: str,
@@ -203,13 +274,9 @@ async def generate_questions(
 
     raw = _strip_json_fences(raw)
     raw = _repair_truncated_json(raw)
-    questions = json.loads(raw)
+    questions = _normalize_questions(json.loads(raw))
 
-    # 確保每題都有 UUID id
-    for q in questions:
-        if not q.get("id"):
-            q["id"] = str(uuid.uuid4())
-
+    logger.info("[generate_questions] normalized_count=%s", len(questions))
     return questions
 
 

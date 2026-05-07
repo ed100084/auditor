@@ -1,5 +1,5 @@
-import { S } from './state.js?v=20260507e';
-import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates } from './api.js?v=20260507e';
+import { S } from './state.js?v=20260507f';
+import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates } from './api.js?v=20260507f';
 import {
   showLoading, hideLoading, showError,
   updateNavBar,
@@ -7,7 +7,7 @@ import {
   renderQuestions, renderResponses, updateRespProgress,
   setReportFormat, renderFindings, renderGovFindings,
   renderSessionHistory,
-} from './ui.js?v=20260507e';
+} from './ui.js?v=20260507f';
 
 // Textarea auto-resize helper（供 renderQuestions oninput 呼叫）
 window._autoResizeTA = function(el) {
@@ -215,7 +215,7 @@ async function goStep2Next() {
   try {
     await api('POST', `/sessions/${S.sessionId}/scope`, { scope, context });
     const res = await api('POST', `/sessions/${S.sessionId}/questions/generate`);
-    S.questions = res.questions;
+    S.questions = normalizeQuestions(res.questions || []);
     renderQuestions();
     goToStep(3);
   } catch (e) {
@@ -229,6 +229,39 @@ async function goStep2Next() {
 function updateQuestionText(id, text) {
   const q = S.questions.find(q => q.id === id);
   if (q) q.text = text;
+}
+
+function normalizeQuestions(questions) {
+  return questions.map(q => {
+    const text = questionText(q);
+    return {
+      ...q,
+      id: q.id || crypto.randomUUID(),
+      text,
+      category: q.category || '治理與合規',
+      source_framework: q.source_framework || q.framework || '',
+      reference: q.reference || '',
+      dimension: q.dimension || 'systemic',
+    };
+  }).filter(q => q.text.trim().length > 0);
+}
+
+function questionText(q) {
+  if (!q) return '';
+  if (q.text) return String(q.text);
+  if (q.question) return String(q.question);
+  if (q.question_text) return String(q.question_text);
+  if (q.content) return String(q.content);
+
+  const parts = [];
+  if (q.title || q.topic) parts.push(q.title || q.topic);
+  const subQuestions = q.questions || q.items || q.sub_questions || q.prompts;
+  if (Array.isArray(subQuestions)) parts.push(subQuestions.join('\n'));
+  else if (subQuestions) parts.push(String(subQuestions));
+  const evidence = q.evidence || q.evidence_request || q.documents;
+  if (Array.isArray(evidence)) parts.push('★ 請提供：' + evidence.join('、'));
+  else if (evidence) parts.push(String(evidence));
+  return parts.filter(Boolean).join('\n');
 }
 
 function removeQuestion(id) {

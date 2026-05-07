@@ -1,4 +1,4 @@
-import { S } from './state.js?v=20260507e';
+import { S } from './state.js?v=20260507f';
 
 // ─── Loading / Toast ──────────────────────────────────────────────
 export function showLoading(text = '處理中...') {
@@ -149,7 +149,7 @@ export function renderQuestions() {
     container.innerHTML = S.questions.map((q, i) => {
       const isSystemic = q.dimension === 'systemic';
       const dimLabel = isSystemic ? '系統性探詢' : (q.dimension || '');
-      const text = q.text || '';
+      const text = questionText(q);
       return `
       <div class="bg-white border border-gray-200 rounded-lg p-4${isSystemic ? ' border-l-4 border-l-indigo-400' : ''}" id="qcard-${q.id}">
         <div class="flex items-start gap-3">
@@ -193,6 +193,7 @@ export function renderResponses() {
   container.innerHTML = S.questions.map((q, i) => {
     const isSystemic = q.dimension === 'systemic';
     const dimLabel = isSystemic ? '系統性探詢' : (q.dimension || '');
+    const text = questionText(q);
     const respRows = isSystemic ? 10 : 4;
     const placeholder = isSystemic
       ? '請依題目各分項逐一回答（可依 (1)(2)(3)(4) 分段說明），並附上所要求的佐證資料說明。'
@@ -202,7 +203,7 @@ export function renderResponses() {
       <div class="flex items-start gap-2 mb-3">
         <span class="text-xs font-bold text-blue-600 shrink-0 mt-0.5 w-7">Q${i + 1}</span>
         <div class="flex-1 min-w-0">
-          <pre class="text-sm font-medium text-gray-800 whitespace-pre-wrap break-words font-sans leading-relaxed">${escHtml(q.text)}</pre>
+          <pre class="text-sm font-medium text-gray-800 whitespace-pre-wrap break-words font-sans leading-relaxed">${escHtml(text)}</pre>
           <div class="flex gap-2 mt-2 flex-wrap">
             <span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">${escHtml(q.category)}</span>
             ${dimLabel ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(dimLabel)}</span>` : ''}
@@ -427,6 +428,24 @@ export function dimensionStyle(dim) {
     '意識': 'bg-pink-100 text-pink-800',
   };
   return map[dim] || 'bg-gray-100 text-gray-700';
+}
+
+function questionText(q) {
+  if (!q) return '';
+  if (q.text) return String(q.text);
+  if (q.question) return String(q.question);
+  if (q.question_text) return String(q.question_text);
+  if (q.content) return String(q.content);
+
+  const parts = [];
+  if (q.title || q.topic) parts.push(q.title || q.topic);
+  const subQuestions = q.questions || q.items || q.sub_questions || q.prompts;
+  if (Array.isArray(subQuestions)) parts.push(subQuestions.join('\n'));
+  else if (subQuestions) parts.push(String(subQuestions));
+  const evidence = q.evidence || q.evidence_request || q.documents;
+  if (Array.isArray(evidence)) parts.push('★ 請提供：' + evidence.join('、'));
+  else if (evidence) parts.push(String(evidence));
+  return parts.filter(Boolean).join('\n');
 }
 
 export function escHtml(str) {
