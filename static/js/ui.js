@@ -145,50 +145,61 @@ export function renderFrameworks(allFrameworks) {
 export function renderQuestions() {
   const container = document.getElementById('question-list');
   document.getElementById('q-count-badge').textContent = S.questions.length + ' 題';
-  container.innerHTML = S.questions.map((q, i) => `
-    <div class="bg-white border border-gray-200 rounded-lg p-4" id="qcard-${q.id}">
+  container.innerHTML = S.questions.map((q, i) => {
+    const isSystemic = q.dimension === 'systemic';
+    const rows = isSystemic ? 8 : 2;
+    const dimLabel = isSystemic ? '系統性探詢' : (q.dimension || '');
+    return `
+    <div class="bg-white border border-gray-200 rounded-lg p-4${isSystemic ? ' border-l-4 border-l-indigo-400' : ''}" id="qcard-${q.id}">
       <div class="flex items-start gap-3">
         <span class="text-xs font-bold text-gray-400 mt-1 w-6 shrink-0 text-right">${i + 1}</span>
         <div class="flex-1">
-          <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent"
-            rows="2" onchange="updateQuestionText('${q.id}', this.value)">${escHtml(q.text)}</textarea>
+          <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent font-mono leading-relaxed"
+            rows="${rows}" onchange="updateQuestionText('${q.id}', this.value)">${escHtml(q.text)}</textarea>
           <div class="flex items-center gap-2 mt-2 flex-wrap">
             <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${escHtml(q.category)}</span>
             <span class="text-xs text-gray-400">${escHtml(q.source_framework)}</span>
             ${q.reference ? `<span class="text-xs text-blue-500">${escHtml(q.reference)}</span>` : ''}
-            ${q.dimension ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(q.dimension)}</span>` : ''}
+            ${dimLabel ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(dimLabel)}</span>` : ''}
           </div>
         </div>
         <button onclick="removeQuestion('${q.id}')" class="text-gray-300 hover:text-red-400 transition-colors mt-1 shrink-0">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 // ─── Responses ───────────────────────────────────────────────────
 export function renderResponses() {
   const container = document.getElementById('response-list');
   updateRespProgress();
-  container.innerHTML = S.questions.map((q, i) => `
-    <div class="bg-white border border-gray-200 rounded-lg p-4">
+  container.innerHTML = S.questions.map((q, i) => {
+    const isSystemic = q.dimension === 'systemic';
+    const dimLabel = isSystemic ? '系統性探詢' : (q.dimension || '');
+    const respRows = isSystemic ? 10 : 4;
+    const placeholder = isSystemic
+      ? '請依題目各分項逐一回答（可依 (1)(2)(3)(4) 分段說明），並附上所要求的佐證資料說明。'
+      : '請輸入受稽單位的回覆...';
+    return `
+    <div class="bg-white border border-gray-200 rounded-lg p-4${isSystemic ? ' border-l-4 border-l-indigo-400' : ''}">
       <div class="flex items-start gap-2 mb-3">
-        <span class="text-xs font-bold text-blue-600 shrink-0 mt-0.5">Q${i + 1}</span>
-        <div>
-          <p class="text-sm font-medium text-gray-800">${escHtml(q.text)}</p>
-          <div class="flex gap-2 mt-1 flex-wrap">
+        <span class="text-xs font-bold text-blue-600 shrink-0 mt-0.5 w-7">Q${i + 1}</span>
+        <div class="flex-1 min-w-0">
+          <pre class="text-sm font-medium text-gray-800 whitespace-pre-wrap break-words font-sans leading-relaxed">${escHtml(q.text)}</pre>
+          <div class="flex gap-2 mt-2 flex-wrap">
             <span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">${escHtml(q.category)}</span>
-            ${q.dimension ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(q.dimension)}</span>` : ''}
+            ${dimLabel ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(dimLabel)}</span>` : ''}
             ${q.reference ? `<span class="text-xs text-blue-400">${escHtml(q.reference)}</span>` : ''}
           </div>
         </div>
       </div>
-      <textarea class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        rows="3" placeholder="請輸入受稽單位的回覆..."
+      <textarea class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+        rows="${respRows}" placeholder="${escHtml(placeholder)}"
         oninput="updateResponse('${q.id}', this.value)">${escHtml(S.responses[q.id] || '')}</textarea>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 export function updateRespProgress() {
@@ -391,6 +402,7 @@ export function renderSessionHistory(sessions) {
 // ─── Utility ─────────────────────────────────────────────────────
 export function dimensionStyle(dim) {
   const map = {
+    'systemic': 'bg-indigo-100 text-indigo-800',
     'P': 'bg-blue-100 text-blue-800',
     'D': 'bg-green-100 text-green-800',
     'C': 'bg-yellow-100 text-yellow-800',
