@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
+
+from matcher import select_questions
 from models import ScopeInput, QuestionUpdate
 from session_store import get_session, update_session
-from question_generator import generate_rule_questions
 
 router = APIRouter(prefix="/sessions", tags=["questions"])
 
@@ -16,7 +17,8 @@ def save_scope(session_id: str, body: ScopeInput):
 
 
 @router.post("/{session_id}/questions/generate")
-async def gen_questions(session_id: str):
+def gen_questions(session_id: str):
+    """從策展題庫挑選稽核問題（純 Python，毫秒級完成）。"""
     session = get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -25,13 +27,19 @@ async def gen_questions(session_id: str):
     if not session.get("frameworks"):
         raise HTTPException(status_code=400, detail="請先選擇法規框架")
 
-    questions = generate_rule_questions(
+    questions = select_questions(
         framework_ids=session["frameworks"],
-        custom_text=session.get("custom_framework_text", ""),
         scope=session["scope"],
         context=session.get("context", ""),
         responsibility_level=session.get("responsibility_level"),
     )
+
+    if not questions:
+        raise HTTPException(
+            status_code=500,
+            detail="題庫未能匹配任何問題；請確認所選框架是否在 question_bank.py 中有對應題目。",
+        )
+
     update_session(session_id, {"questions": questions})
     return {"questions": questions}
 

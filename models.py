@@ -8,6 +8,8 @@ class Question(BaseModel):
     category: str           # 10 大稽核領域之一
     source_framework: str   # e.g. "資通安全管理法", "ISO 27001"
     reference: str = ""     # e.g. "第15條", "A.16.1"
+    dimension: str = "systemic"  # 維度標籤（前端用於樣式區分）
+    bank_id: str = ""       # 題庫來源 ID（追溯用，可選）
 
 
 class Finding(BaseModel):

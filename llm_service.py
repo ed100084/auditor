@@ -1,17 +1,28 @@
+"""
+LLM 服務（僅用於稽核發現報告生成）
+
+設計決策：
+─────────
+本檔案只保留 Step 5 的稽核發現生成。
+Step 3 的問題生成已改用 question_bank + matcher（純 Python，無 LLM）。
+
+提供：
+─────
+- stream_findings()      IIA 5C 格式稽核發現（SSE 串流）
+- stream_gov_findings()  政府機關格式稽核發現（SSE 串流）
+"""
+
 import asyncio
 import json
 import logging
 import re
 import threading
 import time
-import uuid
-from typing import List
 
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
 from azure.core.exceptions import HttpResponseError
-from fastapi.concurrency import run_in_threadpool
 
 from config import settings
 from frameworks import get_framework_text, get_framework_names
@@ -32,14 +43,14 @@ def _get_client() -> ChatCompletionsClient:
 
 
 def _call_with_retry(fn, retries: int = 3, base_delay: float = 5.0):
-    """對 429/503 自動重試，指數退避"""
+    """對 429/503 自動重試，指數退避。"""
     for attempt in range(retries):
         try:
             return fn()
         except HttpResponseError as e:
-            status = e.status_code if hasattr(e, "status_code") else 0
+            status = getattr(e, "status_code", 0)
             if status in (429, 503) and attempt < retries - 1:
-                wait = base_delay * (2 ** attempt)  # 5s, 10s, 20s
+                wait = base_delay * (2 ** attempt)
                 logger.warning(f"Azure 限流 (HTTP {status})，{wait:.0f}s 後重試 (第{attempt+1}次)...")
                 time.sleep(wait)
             else:
@@ -56,18 +67,17 @@ def _strip_json_fences(text: str) -> str:
 
 
 def _repair_truncated_json(text: str) -> str:
-    """修復被截斷的 JSON：追蹤括號堆疊，找最後一個完整物件後補上正確收尾"""
+    """LLM 輸出 token 超出限制時自動修復尾部斷裂的 JSON。"""
     try:
         json.loads(text)
         return text
     except json.JSONDecodeError:
         pass
 
-    # 逐字元追蹤括號堆疊，每次關閉一個 { 時記錄候選截斷點和所需收尾序列
-    stack = []          # 儲存未關閉的 '{' 或 '['
+    stack = []
     in_string = False
     escape_next = False
-    candidates = []     # (截斷位置, 收尾字串)
+    candidates = []
 
     for i, ch in enumerate(text):
         if escape_next:
@@ -81,7 +91,6 @@ def _repair_truncated_json(text: str) -> str:
             continue
         if in_string:
             continue
-
         if ch in ('{', '['):
             stack.append(ch)
         elif ch == '}' and stack and stack[-1] == '{':
@@ -117,214 +126,13 @@ def _build_qa_text(questions: list, responses: list) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def _coerce_text(value) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, list):
-        return "\n".join(_coerce_text(item) for item in value if _coerce_text(item)).strip()
-    if isinstance(value, dict):
-        preferred = (
-            "text",
-            "question",
-            "question_text",
-            "content",
-            "prompt",
-            "audit_question",
-            "main_question",
-            "control_question",
-            "question_content",
-            "question_description",
-            "description",
-            "title",
-        )
-        preferred_keys = set(preferred)
-        parts = [_coerce_text(value.get(key)) for key in preferred if value.get(key)]
-        metadata_keys = {
-            "id",
-            "category",
-            "source_framework",
-            "framework",
-            "reference",
-            "dimension",
-        }
-        parts.extend(
-            _coerce_text(item)
-            for key, item in value.items()
-            if key not in metadata_keys and key not in preferred_keys and item
-        )
-        return "\n".join(part for part in parts if part).strip()
-    return str(value).strip()
-
-
-def _normalize_question(raw_question: dict, index: int) -> dict:
-    if not isinstance(raw_question, dict):
-        raw_question = {"text": _coerce_text(raw_question)}
-
-    text = _coerce_text(raw_question.get("text"))
-    if not text:
-        text = _coerce_text(raw_question.get("question"))
-    if not text:
-        text = _coerce_text(raw_question.get("question_text"))
-    if not text:
-        text = _coerce_text(raw_question.get("content"))
-    if not text:
-        text = _coerce_text(raw_question.get("prompt"))
-    if not text:
-        text = _coerce_text(raw_question.get("audit_question"))
-    if not text:
-        text = _coerce_text(raw_question.get("main_question"))
-    if not text:
-        text = _coerce_text(raw_question.get("control_question"))
-    if not text:
-        text = _coerce_text(raw_question.get("question_content"))
-    if not text:
-        text = _coerce_text(raw_question.get("question_description"))
-
-    if not text:
-        title = _coerce_text(raw_question.get("title") or raw_question.get("topic"))
-        detail = _coerce_text(
-            raw_question.get("questions")
-            or raw_question.get("items")
-            or raw_question.get("sub_questions")
-            or raw_question.get("prompts")
-        )
-        evidence = _coerce_text(
-            raw_question.get("evidence")
-            or raw_question.get("evidence_request")
-            or raw_question.get("documents")
-        )
-        text = "\n".join(part for part in (title, detail, evidence) if part).strip()
-    if not text:
-        text = _coerce_text(raw_question)
-
-    return {
-        "id": str(raw_question.get("id") or uuid.uuid4()),
-        "text": text,
-        "category": _coerce_text(raw_question.get("category")) or "治理與合規",
-        "source_framework": _coerce_text(raw_question.get("source_framework")) or _coerce_text(raw_question.get("framework")),
-        "reference": _coerce_text(raw_question.get("reference")),
-        "dimension": _coerce_text(raw_question.get("dimension")) or "systemic",
-    }
-
-
-def _normalize_questions(raw_questions: list) -> list:
-    if not isinstance(raw_questions, list):
-        raise ValueError("LLM questions response must be a JSON array")
-
-    normalized = [
-        question
-        for i, raw_question in enumerate(raw_questions, 1)
-        if (question := _normalize_question(raw_question, i)).get("text")
-    ]
-    if not normalized:
-        logger.error("LLM returned questions without usable text: %s", raw_questions)
-        raise ValueError("LLM 產生的稽核問題沒有可用的題目內容，請重新產生")
-    return normalized
-
-
-async def generate_questions(
-    framework_ids: List[str],
-    custom_text: str,
-    scope: str,
-    context: str,
-    responsibility_level: str | None,
-) -> list:
-    framework_text = get_framework_text(framework_ids, custom_text, compact=True)
-    framework_names = ", ".join(get_framework_names(framework_ids))
-    if custom_text:
-        framework_names += ", 自訂法規文件"
-
-    level_note = ""
-    if responsibility_level:
-        level_note = f"\n\n受稽單位責任等級：**{responsibility_level} 級**。請依此等級之適用控制要求產生問題。"
-
-    system_prompt = "\n".join([
-        "你是一位資深資通安全稽核委員，擅長以「系統性稽核探詢」手法揭露整體性資安問題。",
-        "根據提供的法規框架與稽核範圍，設計一份能辨識系統性缺失的深度稽核問題清單。",
-        "",
-        "【核心概念：系統性稽核探詢 vs 傳統單問題稽核】",
-        "傳統稽核一題只問「有無」某項措施，讓受稽單位得以表面應付。",
-        "系統性探詢每題整合多個稽核角度，要求受稽單位交代完整 PDCA 循環。",
-        "稽核委員從回答的完整性、前後一致性與邏輯辨別真正的制度成熟度，",
-        "並從「說不清楚的部分」找到系統性弱點：制度缺口、執行落差、監控盲點、改善失靈。",
-        "",
-        "【每題必須覆蓋以下四個角度中的至少三個】",
-        "  P 計畫：相關政策/程序是否完備？上次修訂時間與主管單位為何？",
-        "  D 執行：實際如何執行？由哪個職位負責？流程時效或頻率為何？",
-        "  C 查核：如何驗證執行成效？有哪些指標或稽核機制？最近一次結果為何？",
-        "  A 改善：過去發現哪些問題？如何改善？改善效果是否持續追蹤？",
-        "",
-        "【每題另須包含以下至少一項手法】",
-        "  佐證要求：明確請受稽單位提供可查核的文件/紀錄/系統截圖",
-        "  例外情境：詢問當發生特定異常或失敗時的處理方式（辨別真實執行能力）",
-        "",
-        "【問題格式（固定五段結構，各段以 \\n 換行）】",
-        "  【{控制領域主題}】{一句話說明本題稽核重點}",
-        "  (1) {P 或 D 面問題，要求說明機制或流程}",
-        "  (2) {D 或 C 面問題，要求舉例或說明頻率/結果}",
-        "  (3) {C 或 A 面問題，要求數字/時間/追蹤結果}",
-        "  (4) 例外情境：{描述一個具體失敗/異常場景}，此時如何處理？上次發生是何時？",
-        "  ★ 請提供：{指定應出示的文件/截圖/紀錄名稱}",
-        "",
-        "【輸出規則】",
-        "- 僅輸出純 JSON array，不含 markdown 或說明文字",
-        '- 格式（每題一個物件，最終輸出為完整 JSON array）：{"id":"<uuid>","text":"【領域】重點\\n(1) 問題一\\n(2) 問題二\\n(3) 問題三\\n(4) 例外情境：描述...\\n★ 請提供：文件","category":"<稽核領域>","source_framework":"<法規名稱>","reference":"<條文或控制編號>","dimension":"systemic"}',
-        "- 稽核領域限用：治理與合規、風險管理、資產管理、存取控制、委外管理、事件應變、業務持續、情資威脅、教育訓練、隱私保護",
-        "- 產生 10–14 題，依本次稽核範圍與情境的高風險控制領域排序，不必面面俱到但每題需有實質深度",
-        "- 各題聚焦不同控制領域（不重複），問題直接具體，避免可用「是/否」一句回答的封閉問題",
-        "- text 中的換行一律使用 \\n，不可使用真實換行符或其他跳脫字元",
-    ])
-
-    user_message = (
-        f"適用法規框架：{framework_names}\n\n"
-        f"法規參考內容：\n{framework_text}\n\n"
-        f"稽核範圍：{scope}\n\n"
-        f"稽核情境/背景：{context}"
-        f"{level_note}\n\n"
-        "請產生稽核問題清單。"
-    )
-
-    msgs = [SystemMessage(content=system_prompt), UserMessage(content=user_message)]
-    response = await run_in_threadpool(
-        lambda: _call_with_retry(lambda: _get_client().complete(
-            messages=msgs,
-            model=settings.AZURE_AI_MODEL,
-            max_tokens=4096,
-            temperature=0.3,
-        ))
-    )
-
-    logger.info(f"[generate_questions] finish_reason={getattr(response.choices[0], 'finish_reason', 'N/A')}")
-
-    choice = response.choices[0]
-    finish_reason = getattr(choice, "finish_reason", None)
-    raw = choice.message.content
-
-    if not raw:
-        raise ValueError(
-            f"模型回傳空內容（finish_reason={finish_reason}）。"
-            "可能原因：內容被過濾、Token 超出限制或模型部署問題。"
-        )
-
-    raw = _strip_json_fences(raw)
-    raw = _repair_truncated_json(raw)
-    questions = _normalize_questions(json.loads(raw))
-
-    logger.info("[generate_questions] normalized_count=%s", len(questions))
-    return questions
-
-
 async def _stream_sse(msgs: list, max_tokens: int, temperature: float):
-    """真正的 LLM streaming：逐 token 透過 SSE 推送給前端。
-    以 daemon thread 執行 Azure streaming call，透過 asyncio.Queue 橋接到 async generator。
-    JSON 截斷時透過 repair 事件通知前端替換 buffer，_repair_truncated_json 作為 fallback。
-    """
+    """Azure streaming → SSE bridge（threading + asyncio.Queue）。"""
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
 
     def _run_stream():
         try:
-            # 初始請求失敗時（429/503）自動重試；mid-stream 錯誤直接傳遞
             response = _call_with_retry(lambda: _get_client().complete(
                 messages=msgs,
                 model=settings.AZURE_AI_MODEL,
@@ -364,7 +172,6 @@ async def _stream_sse(msgs: list, max_tokens: int, temperature: float):
         if kind == "done":
             finish_reason = value
             break
-        # kind == "token"
         buffer.append(value)
         yield f"data: {json.dumps({'chunk': value})}\n\n"
 
@@ -387,6 +194,7 @@ async def _stream_sse(msgs: list, max_tokens: int, temperature: float):
     yield "data: [DONE]\n\n"
 
 
+# ─── IIA 5C 格式稽核發現 ──────────────────────────────────────
 async def stream_findings(session: dict):
     framework_ids = session.get("frameworks", [])
     custom_text = session.get("custom_framework_text", "")
@@ -427,7 +235,6 @@ async def stream_findings(session: dict):
         "- legal_requirement：應辦事項，直接引用法條原文中規定義務的段落",
         "  即法條中「機關應…」、「應辦理…」、「不得…」等強制規定的原文文字",
         "  若涉及多條法規，分段列出各條文的義務原文",
-        "  範例：「資通安全管理法第18條：各機關辦理資通安全稽核，應就資通安全政策…」",
         "- condition：現況，稽核發現的具體事實（引用受稽單位回覆為佐證）",
         "- criteria：準則，以白話說明本項應達到的合規狀態（非法條原文）",
         "- cause：原因，造成落差的根本原因（制度面、人員面、技術面）",
@@ -442,7 +249,6 @@ async def stream_findings(session: dict):
         "重要原則：",
         "- 僅針對有具體證據支持的問題產生發現",
         "- 若回覆顯示已完全符合要求，不產生該項發現",
-        "- regulatory_reference 為簡短引用（標題旁顯示），legal_basis 為完整條文全名",
         "- legal_requirement 必須是法條原文，不可改寫或摘要",
         "- 發現依風險等級由高至低排序",
     ])
@@ -459,8 +265,8 @@ async def stream_findings(session: dict):
     return _stream_sse(msgs, max_tokens=8192, temperature=0.2)
 
 
+# ─── 政府機關格式稽核發現 ─────────────────────────────────────
 async def stream_gov_findings(session: dict):
-    """政府機關格式稽核發現報告（衛福部/數位部 CI 稽核格式）"""
     framework_ids = session.get("frameworks", [])
     custom_text = session.get("custom_framework_text", "")
     framework_text = get_framework_text(framework_ids, custom_text)
@@ -502,7 +308,7 @@ async def stream_gov_findings(session: dict):
         "- title：本項缺失的簡短標題，20 字以內",
         "- legal_basis：法源依據，具體條文全名（條號層級），例：「資通安全管理法第18條第1項」",
         "  若適用多個法條以頓號（、）連接",
-        "- legal_text：應辦事項，直接引用法條原文中的強制義務段落（「機關應…」「應辦理…」「不得…」等）",
+        "- legal_text：應辦事項，直接引用法條原文中的強制義務段落",
         "  格式：「[法規名稱第X條]：原文內容」，若涉及多條法規分段列出",
         "  此欄位必須是法條原文，不可自行改寫或摘要",
         "- finding_description：稽核發現說明，具體描述觀察到的不符合事實，引用受稽單位回覆為佐證",
