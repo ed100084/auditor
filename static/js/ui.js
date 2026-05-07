@@ -1,4 +1,4 @@
-import { S } from './state.js?v=20260507g';
+import { S } from './state.js?v=20260507h';
 
 // ─── Loading / Toast ──────────────────────────────────────────────
 export function showLoading(text = '處理中...') {
@@ -157,8 +157,9 @@ export function renderQuestions() {
           <div class="flex-1">
             <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent leading-relaxed"
               rows="1" style="overflow:hidden"
+              data-question-id="${escHtml(q.id)}"
               oninput="_autoResizeTA(this); updateQuestionText('${q.id}', this.value)"
-              >${escHtml(text)}</textarea>
+            ></textarea>
             <div class="flex items-center gap-2 mt-2 flex-wrap">
               <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${escHtml(q.category || '')}</span>
               <span class="text-xs text-gray-400">${escHtml(q.source_framework || '')}</span>
@@ -172,8 +173,12 @@ export function renderQuestions() {
         </div>
       </div>`;
     }).join('');
-    // 自動撐高所有 textarea 以符合內容（手機/桌機同效）
-    container.querySelectorAll('textarea').forEach(ta => {
+    // Use value assignment instead of textarea innerHTML so odd model text cannot
+    // be swallowed by HTML parsing.
+    container.querySelectorAll('textarea').forEach((ta, i) => {
+      const q = S.questions[i];
+      const text = questionText(q);
+      ta.value = text || missingQuestionText(q);
       ta.style.height = '0';
       ta.style.height = ta.scrollHeight + 'px';
     });
@@ -461,6 +466,10 @@ function questionText(q) {
   if (structured) return structured;
 
   return coerceQuestionText(q) || JSON.stringify(q, null, 2);
+}
+
+function missingQuestionText(q) {
+  return `【題目內容缺失】\n${JSON.stringify(q || {}, null, 2)}`;
 }
 
 function coerceQuestionText(value) {
