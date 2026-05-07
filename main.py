@@ -1,6 +1,6 @@
 import os
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +10,16 @@ from dependencies.auth import verify_api_key
 from routers import session, framework, questions, responses, findings, templates
 
 app = FastAPI(title="資安稽核助手 API", version="1.0.0")
+
+
+# 靜態 JS 檔案不快取，確保部署後使用者立即取得新版
+@app.middleware("http")
+async def no_cache_js(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static/") and request.url.path.endswith(".js"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
 
 # CORS
 origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]

@@ -1,4 +1,4 @@
-import { S } from './state.js?v=20260507c';
+import { S } from './state.js?v=20260507d';
 
 // ─── Loading / Toast ──────────────────────────────────────────────
 export function showLoading(text = '處理中...') {
@@ -149,17 +149,15 @@ export function renderQuestions() {
     container.innerHTML = S.questions.map((q, i) => {
       const isSystemic = q.dimension === 'systemic';
       const dimLabel = isSystemic ? '系統性探詢' : (q.dimension || '');
-      // 依換行數決定 rows，避免出現 scrollbar；q.text 若為 null/undefined 以空字串處理
       const text = q.text || '';
-      const rows = Math.max(text.split('\n').length, isSystemic ? 6 : 2);
       return `
       <div class="bg-white border border-gray-200 rounded-lg p-4${isSystemic ? ' border-l-4 border-l-indigo-400' : ''}" id="qcard-${q.id}">
         <div class="flex items-start gap-3">
           <span class="text-xs font-bold text-gray-400 mt-1 w-6 shrink-0 text-right">${i + 1}</span>
           <div class="flex-1">
             <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent leading-relaxed"
-              rows="${rows}"
-              oninput="updateQuestionText('${q.id}', this.value)"
+              rows="1" style="overflow:hidden"
+              oninput="_autoResizeTA(this); updateQuestionText('${q.id}', this.value)"
               >${escHtml(text)}</textarea>
             <div class="flex items-center gap-2 mt-2 flex-wrap">
               <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${escHtml(q.category || '')}</span>
@@ -174,6 +172,11 @@ export function renderQuestions() {
         </div>
       </div>`;
     }).join('');
+    // 自動撐高所有 textarea 以符合內容（手機/桌機同效）
+    container.querySelectorAll('textarea').forEach(ta => {
+      ta.style.height = '0';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
   } catch (err) {
     console.error('renderQuestions error:', err);
     container.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
