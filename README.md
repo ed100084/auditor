@@ -6,6 +6,125 @@
 
 ---
 
+## ⚠️ 交接狀態（2026-05-07）
+
+### 未解決的 Bug
+
+#### 🔴 「產生稽核問題」結果為空（0 題）
+
+**症狀：** 完成 Step 2 後點「產生稽核問題」，Step 3 顯示 0 題，清單空白。
+
+**已排查的根本原因：**
+
+`llm_service.py` 的 system prompt 中，格式範例曾是一個完整 JSON array：
+```
+[{"id":"...","text":"..."}]
+```
+LLM 將這段當作「期望的完整輸出範本」，照著輸出空陣列或只有 1 題。
+
+**已嘗試的修正（commit `a77937d`）：**  
+將格式範例改回單一物件（不含外層 `[...]`），但使用者回報問題仍然存在，**尚未確認實際效果或找到真正根因**。
+
+---
+
+**接手者請先做這幾件事：**
+
+**Step 1：確認 commit 是否已推送**
+```bash
+git log origin/main --oneline -5
+```
+最新應是 `a77937d`。若不是，先執行：
+```bash
+git push origin main
+```
+（注意：在 Claude Code 內 git push 會被系統攔截，需在獨立終端機手動執行）
+
+**Step 2：直接 call API 看 LLM 回傳什麼**
+```bash
+# 1. 建立 session
+curl -X POST https://secauditor.azurewebsites.net/api/sessions \
+  -H "X-API-Key: YOUR_KEY" -H "Content-Type: application/json" \
+  -d '{"user_name":"test"}'
+# → 取得 session_id
+
+# 2. 設定框架
+curl -X POST https://secauditor.azurewebsites.net/api/sessions/{SESSION_ID}/framework \
+  -H "X-API-Key: YOUR_KEY" -H "Content-Type: application/json" \
+  -d '{"frameworks":["csma_core"],"responsibility_level":null}'
+
+# 3. 設定範圍
+curl -X POST https://secauditor.azurewebsites.net/api/sessions/{SESSION_ID}/scope \
+  -H "X-API-Key: YOUR_KEY" -H "Content-Type: application/json" \
+  -d '{"scope":"醫院資訊系統稽核","context":"年度例行資安稽核，稽核對象為醫療資訊部門"}'
+
+# 4. 產生問題（觀察回傳）
+curl -X POST https://secauditor.azurewebsites.net/api/sessions/{SESSION_ID}/questions/generate \
+  -H "X-API-Key: YOUR_KEY"
+```
+- 若回傳 `{"questions":[]}` → LLM 就是回傳空陣列，prompt 需繼續調整
+- 若回傳有 questions → 是前端 JS 問題
+
+**Step 3：看 Azure 伺服器 log**
+- Azure Portal → App Service `secauditor` → 監視 → Log stream
+- 關鍵 log：`[generate_questions] finish_reason=...`
+  - `stop` = 正常完成
+  - `content_filter` = 內容被 Azure 過濾
+  - `length` = 超出 token 限制（`max_tokens=4096`，可嘗試降低 prompt 長度）
+
+**Step 4：若需繼續調整 prompt**
+
+關鍵檔案：`llm_service.py` line 136–172（`generate_questions` 的 `system_prompt`）
+
+可嘗試：
+- 在 prompt 最末加強指令：`"重要：必須產生至少 10 個物件，不可回傳空陣列。"`
+- 調高 temperature（目前 0.3）
+- 縮短 framework_text（`compact=True` 已啟用，但各框架的 `compact()` 實作可再精簡）
+- 換模型：`config.py` 的 `AZURE_AI_MODEL`（目前 `Kimi-K2.5`）
+
+---
+
+### Git 狀態
+
+| Commit | 內容 | 推送狀態 |
+|--------|------|----------|
+| `a77937d` | fix: LLM 格式範例改回單一物件 | ⚠️ **尚未確認是否已推送** |
+| `d6594da` | 手機 textarea 自動展高 + no-cache middleware | ✅ 已推送 |
+| `735fc44` | fix ES module 分裂 | ✅ 已推送 |
+
+---
+
+### 已知次要問題
+
+- **手機 textarea 高度**：commit `d6594da` 已用 `scrollHeight` 修正，但未在真實手機驗證最終效果
+- **git push 被攔截**：Claude Code 內的 git push 會被系統安全分類器攔截，需在獨立終端手動執行
+
+---
+
+### 重要架構陷阱（ES Module 分裂）
+
+前端的 3 個 JS 檔案（`main.js`、`ui.js`、`api.js`）都從 `state.js` import 共用狀態物件 `S`。  
+**瀏覽器以 URL 完整字串（含 query string）作為 module 識別 key。** 若 import 路徑不一致，會產生多個 S 實例，導致狀態修改跨不了檔案邊界。
+
+目前三個 JS 檔統一使用 `?v=20260507d`：
+```js
+// main.js
+import { S } from './state.js?v=20260507d';
+
+// ui.js
+import { S } from './state.js?v=20260507d';  // ← 必須與 main.js 完全一致
+```
+以及 `index.html`：
+```html
+<script type="module" src="js/main.js?v=20260507d"></script>
+```
+
+**修改 JS 時，若要更新 version，三個地方必須同步改。**  
+`main.py` 已加 `Cache-Control: no-cache` middleware，未來可省略 version bump，但舊有的 `?v=...` 不能移除（移除後舊瀏覽器 cache 的版本會沿用舊路徑）。
+
+---
+
+---
+
 ## 功能概覽
 
 **五步驟稽核精靈：**
