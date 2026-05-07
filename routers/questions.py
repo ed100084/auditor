@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from models import ScopeInput, QuestionUpdate
 from session_store import get_session, update_session
-from llm_service import generate_questions
+from question_generator import generate_rule_questions
 
 router = APIRouter(prefix="/sessions", tags=["questions"])
 
@@ -25,7 +25,7 @@ async def gen_questions(session_id: str):
     if not session.get("frameworks"):
         raise HTTPException(status_code=400, detail="請先選擇法規框架")
 
-    questions = await generate_questions(
+    questions = generate_rule_questions(
         framework_ids=session["frameworks"],
         custom_text=session.get("custom_framework_text", ""),
         scope=session["scope"],

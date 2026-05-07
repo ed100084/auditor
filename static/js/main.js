@@ -1,5 +1,5 @@
-import { S } from './state.js?v=20260507h';
-import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates } from './api.js?v=20260507h';
+import { S } from './state.js?v=20260507i';
+import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates } from './api.js?v=20260507i';
 import {
   showLoading, hideLoading, showError,
   updateNavBar,
@@ -7,7 +7,7 @@ import {
   renderQuestions, renderResponses, updateRespProgress,
   setReportFormat, renderFindings, renderGovFindings,
   renderSessionHistory,
-} from './ui.js?v=20260507h';
+} from './ui.js?v=20260507i';
 
 // Textarea auto-resize helper（供 renderQuestions oninput 呼叫）
 window._autoResizeTA = function(el) {
