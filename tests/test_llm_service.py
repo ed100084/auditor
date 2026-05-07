@@ -44,6 +44,24 @@ def test_normalize_questions_composes_nested_question_parts():
     )
 
 
+def test_normalize_questions_scans_unknown_nested_fields():
+    questions = _normalize_questions([
+        {
+            "category": "委外管理",
+            "source_framework": "資通安全管理法",
+            "reference": "第15條",
+            "audit_detail": {
+                "main_question": "請說明委外廠商資安要求如何納入契約。",
+                "follow_up": ["如何驗證廠商落實？", "缺失如何追蹤？"],
+            },
+        }
+    ])
+
+    assert "請說明委外廠商資安要求如何納入契約。" in questions[0]["text"]
+    assert "如何驗證廠商落實？" in questions[0]["text"]
+    assert questions[0]["category"] == "委外管理"
+
+
 def test_normalize_questions_rejects_empty_question_text():
     with pytest.raises(ValueError):
         _normalize_questions([{"id": "q1", "category": "治理與合規"}])

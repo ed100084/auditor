@@ -1,4 +1,4 @@
-import { S } from './state.js?v=20260507f';
+import { S } from './state.js?v=20260507g';
 
 // ─── Loading / Toast ──────────────────────────────────────────────
 export function showLoading(text = '處理中...') {
@@ -432,10 +432,22 @@ export function dimensionStyle(dim) {
 
 function questionText(q) {
   if (!q) return '';
-  if (q.text) return String(q.text);
-  if (q.question) return String(q.question);
-  if (q.question_text) return String(q.question_text);
-  if (q.content) return String(q.content);
+  const keys = [
+    'text',
+    'question',
+    'question_text',
+    'content',
+    'prompt',
+    'audit_question',
+    'main_question',
+    'control_question',
+    'question_content',
+    'question_description',
+  ];
+  for (const key of keys) {
+    const value = coerceQuestionText(q[key]);
+    if (value) return value;
+  }
 
   const parts = [];
   if (q.title || q.topic) parts.push(q.title || q.topic);
@@ -445,7 +457,26 @@ function questionText(q) {
   const evidence = q.evidence || q.evidence_request || q.documents;
   if (Array.isArray(evidence)) parts.push('★ 請提供：' + evidence.join('、'));
   else if (evidence) parts.push(String(evidence));
-  return parts.filter(Boolean).join('\n');
+  const structured = parts.map(coerceQuestionText).filter(Boolean).join('\n');
+  if (structured) return structured;
+
+  return coerceQuestionText(q) || JSON.stringify(q, null, 2);
+}
+
+function coerceQuestionText(value) {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) {
+    return value.map(coerceQuestionText).filter(Boolean).join('\n');
+  }
+  if (typeof value === 'object') {
+    const skip = new Set(['id', 'category', 'source_framework', 'framework', 'reference', 'dimension']);
+    return Object.entries(value)
+      .filter(([key, item]) => !skip.has(key) && item !== null && item !== undefined)
+      .map(([, item]) => coerceQuestionText(item))
+      .filter(Boolean)
+      .join('\n');
+  }
+  return String(value).trim();
 }
 
 export function escHtml(str) {

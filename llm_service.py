@@ -128,10 +128,30 @@ def _coerce_text(value) -> str:
             "question",
             "question_text",
             "content",
+            "prompt",
+            "audit_question",
+            "main_question",
+            "control_question",
+            "question_content",
+            "question_description",
             "description",
             "title",
         )
+        preferred_keys = set(preferred)
         parts = [_coerce_text(value.get(key)) for key in preferred if value.get(key)]
+        metadata_keys = {
+            "id",
+            "category",
+            "source_framework",
+            "framework",
+            "reference",
+            "dimension",
+        }
+        parts.extend(
+            _coerce_text(item)
+            for key, item in value.items()
+            if key not in metadata_keys and key not in preferred_keys and item
+        )
         return "\n".join(part for part in parts if part).strip()
     return str(value).strip()
 
@@ -147,6 +167,18 @@ def _normalize_question(raw_question: dict, index: int) -> dict:
         text = _coerce_text(raw_question.get("question_text"))
     if not text:
         text = _coerce_text(raw_question.get("content"))
+    if not text:
+        text = _coerce_text(raw_question.get("prompt"))
+    if not text:
+        text = _coerce_text(raw_question.get("audit_question"))
+    if not text:
+        text = _coerce_text(raw_question.get("main_question"))
+    if not text:
+        text = _coerce_text(raw_question.get("control_question"))
+    if not text:
+        text = _coerce_text(raw_question.get("question_content"))
+    if not text:
+        text = _coerce_text(raw_question.get("question_description"))
 
     if not text:
         title = _coerce_text(raw_question.get("title") or raw_question.get("topic"))
@@ -162,6 +194,8 @@ def _normalize_question(raw_question: dict, index: int) -> dict:
             or raw_question.get("documents")
         )
         text = "\n".join(part for part in (title, detail, evidence) if part).strip()
+    if not text:
+        text = _coerce_text(raw_question)
 
     return {
         "id": str(raw_question.get("id") or uuid.uuid4()),
