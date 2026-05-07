@@ -1,5 +1,5 @@
-import { S } from './state.js?v=20260507j';
-import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates, fetchApiVersion } from './api.js?v=20260507j';
+import { S } from './state.js?v=20260507k';
+import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates, fetchApiVersion } from './api.js?v=20260507k';
 import {
   showLoading, hideLoading, showError,
   updateNavBar,
@@ -7,7 +7,7 @@ import {
   renderQuestions, renderResponses, updateRespProgress,
   setReportFormat, renderFindings, renderGovFindings,
   renderSessionHistory,
-} from './ui.js?v=20260507j';
+} from './ui.js?v=20260507k';
 
 // Textarea auto-resize helper（供 renderQuestions oninput 呼叫）
 window._autoResizeTA = function(el) {
@@ -57,6 +57,10 @@ async function showApiVersion() {
 
 // ─── Step Navigation ─────────────────────────────────────────────
 function goToStep(n) {
+  if (n === 3) {
+    ensureQuestions();
+    renderQuestions();
+  }
   document.querySelectorAll('.step-panel').forEach(el => el.classList.remove('active'));
   document.getElementById(`step-${n}`).classList.add('active');
   S.currentStep = n;
@@ -236,10 +240,8 @@ async function goStep2Next() {
   try {
     await api('POST', `/sessions/${S.sessionId}/scope`, { scope, context });
     const res = await api('POST', `/sessions/${S.sessionId}/questions/generate`);
-    S.questions = normalizeQuestions(res.questions || []);
-    if (S.questions.length === 0) {
-      S.questions = buildFallbackQuestions(scope, context);
-    }
+    S.questions = normalizeQuestions(Array.isArray(res.questions) ? res.questions : []);
+    ensureQuestions(scope, context);
     renderQuestions();
     goToStep(3);
   } catch (e) {
@@ -298,6 +300,13 @@ function buildFallbackQuestions(scope, context) {
     dimension: '系統性探詢',
     generated_by: 'frontend_fallback',
   }));
+}
+
+function ensureQuestions(scope, context) {
+  if (S.questions.length > 0) return;
+  const currentScope = scope ?? document.getElementById('scope-input')?.value?.trim() ?? '';
+  const currentContext = context ?? document.getElementById('context-input')?.value?.trim() ?? '';
+  S.questions = buildFallbackQuestions(currentScope, currentContext);
 }
 
 function questionText(q) {
