@@ -145,33 +145,42 @@ export function renderFrameworks(allFrameworks) {
 export function renderQuestions() {
   const container = document.getElementById('question-list');
   document.getElementById('q-count-badge').textContent = S.questions.length + ' 題';
-  container.innerHTML = S.questions.map((q, i) => {
-    const isSystemic = q.dimension === 'systemic';
-    const dimLabel = isSystemic ? '系統性探詢' : (q.dimension || '');
-    // 依換行數決定 rows，避免出現 scrollbar
-    const rows = Math.max(q.text.split('\n').length, isSystemic ? 6 : 2);
-    return `
-    <div class="bg-white border border-gray-200 rounded-lg p-4${isSystemic ? ' border-l-4 border-l-indigo-400' : ''}" id="qcard-${q.id}">
-      <div class="flex items-start gap-3">
-        <span class="text-xs font-bold text-gray-400 mt-1 w-6 shrink-0 text-right">${i + 1}</span>
-        <div class="flex-1">
-          <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent leading-relaxed"
-            rows="${rows}"
-            oninput="updateQuestionText('${q.id}', this.value)"
-            >${escHtml(q.text)}</textarea>
-          <div class="flex items-center gap-2 mt-2 flex-wrap">
-            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${escHtml(q.category)}</span>
-            <span class="text-xs text-gray-400">${escHtml(q.source_framework)}</span>
-            ${q.reference ? `<span class="text-xs text-blue-500">${escHtml(q.reference)}</span>` : ''}
-            ${dimLabel ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(dimLabel)}</span>` : ''}
+  try {
+    container.innerHTML = S.questions.map((q, i) => {
+      const isSystemic = q.dimension === 'systemic';
+      const dimLabel = isSystemic ? '系統性探詢' : (q.dimension || '');
+      // 依換行數決定 rows，避免出現 scrollbar；q.text 若為 null/undefined 以空字串處理
+      const text = q.text || '';
+      const rows = Math.max(text.split('\n').length, isSystemic ? 6 : 2);
+      return `
+      <div class="bg-white border border-gray-200 rounded-lg p-4${isSystemic ? ' border-l-4 border-l-indigo-400' : ''}" id="qcard-${q.id}">
+        <div class="flex items-start gap-3">
+          <span class="text-xs font-bold text-gray-400 mt-1 w-6 shrink-0 text-right">${i + 1}</span>
+          <div class="flex-1">
+            <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent leading-relaxed"
+              rows="${rows}"
+              oninput="updateQuestionText('${q.id}', this.value)"
+              >${escHtml(text)}</textarea>
+            <div class="flex items-center gap-2 mt-2 flex-wrap">
+              <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${escHtml(q.category || '')}</span>
+              <span class="text-xs text-gray-400">${escHtml(q.source_framework || '')}</span>
+              ${q.reference ? `<span class="text-xs text-blue-500">${escHtml(q.reference)}</span>` : ''}
+              ${dimLabel ? `<span class="text-xs font-semibold px-2 py-0.5 rounded ${dimensionStyle(q.dimension)}">${escHtml(dimLabel)}</span>` : ''}
+            </div>
           </div>
+          <button onclick="removeQuestion('${q.id}')" class="text-gray-300 hover:text-red-400 transition-colors mt-1 shrink-0">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
         </div>
-        <button onclick="removeQuestion('${q.id}')" class="text-gray-300 hover:text-red-400 transition-colors mt-1 shrink-0">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-        </button>
-      </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('renderQuestions error:', err);
+    container.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+      問題清單顯示發生錯誤：${escHtml(err.message)}<br>
+      <button onclick="goStep2Next()" class="mt-2 underline">重新產生問題</button>
     </div>`;
-  }).join('');
+  }
 }
 
 // ─── Responses ───────────────────────────────────────────────────
