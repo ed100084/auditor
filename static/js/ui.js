@@ -141,12 +141,6 @@ export function renderFrameworks(allFrameworks) {
   S.frameworks = allFrameworks.filter(fw => fw.primary).map(fw => fw.id);
 }
 
-// ─── Auto-resize textarea to fit content ─────────────────────────
-function autoResize(el) {
-  el.style.height = 'auto';
-  el.style.height = el.scrollHeight + 'px';
-}
-
 // ─── Questions ───────────────────────────────────────────────────
 export function renderQuestions() {
   const container = document.getElementById('question-list');
@@ -154,14 +148,16 @@ export function renderQuestions() {
   container.innerHTML = S.questions.map((q, i) => {
     const isSystemic = q.dimension === 'systemic';
     const dimLabel = isSystemic ? '系統性探詢' : (q.dimension || '');
+    // 依換行數決定 rows，避免出現 scrollbar
+    const rows = Math.max(q.text.split('\n').length, isSystemic ? 6 : 2);
     return `
     <div class="bg-white border border-gray-200 rounded-lg p-4${isSystemic ? ' border-l-4 border-l-indigo-400' : ''}" id="qcard-${q.id}">
       <div class="flex items-start gap-3">
         <span class="text-xs font-bold text-gray-400 mt-1 w-6 shrink-0 text-right">${i + 1}</span>
         <div class="flex-1">
-          <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none overflow-hidden focus:ring-0 bg-transparent leading-relaxed"
-            rows="1"
-            oninput="updateQuestionText('${q.id}', this.value); this.style.height='auto'; this.style.height=this.scrollHeight+'px'"
+          <textarea class="w-full text-sm text-gray-800 border-0 p-0 resize-none focus:ring-0 bg-transparent leading-relaxed"
+            rows="${rows}"
+            oninput="updateQuestionText('${q.id}', this.value)"
             >${escHtml(q.text)}</textarea>
           <div class="flex items-center gap-2 mt-2 flex-wrap">
             <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${escHtml(q.category)}</span>
@@ -176,9 +172,6 @@ export function renderQuestions() {
       </div>
     </div>`;
   }).join('');
-
-  // 渲染完後立即依內容撐高每個 textarea
-  container.querySelectorAll('textarea').forEach(autoResize);
 }
 
 // ─── Responses ───────────────────────────────────────────────────
