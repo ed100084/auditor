@@ -8,3 +8,4 @@ dist/
 *.db
 data/
 .pytest_cache/
+.claude/worktrees/

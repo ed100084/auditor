@@ -1,4 +1,8 @@
-export const API_BASE = "https://secauditor.azurewebsites.net";
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+export const API_BASE = LOCAL_HOSTS.has(window.location.hostname)
+  ? window.location.origin
+  : "https://secauditor.azurewebsites.net";
 
 // ─── API Key ────────────────────────────────────────────────────
 export function getApiKey() {

@@ -40,13 +40,15 @@ app.include_router(framework.router, prefix="/api", dependencies=api_auth)
 app.include_router(questions.router, prefix="/api", dependencies=api_auth)
 app.include_router(responses.router, prefix="/api", dependencies=api_auth)
 app.include_router(findings.router, prefix="/api", dependencies=api_auth)
-# Templates are static public data — no auth required
-app.include_router(templates.router, prefix="/api")
+# Templates are also protected because they expose audit scope details.
+app.include_router(templates.router, prefix="/api", dependencies=api_auth)
 
 # Serve static frontend
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.isdir(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    app.mount("/css", StaticFiles(directory=os.path.join(static_dir, "css")), name="css")
+    app.mount("/js", StaticFiles(directory=os.path.join(static_dir, "js")), name="js")
 
     @app.get("/")
     def root():
