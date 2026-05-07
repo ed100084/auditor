@@ -1,5 +1,5 @@
-import { S } from './state.js?v=20260507i';
-import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates } from './api.js?v=20260507i';
+import { S } from './state.js?v=20260507j';
+import { getApiKey, getUserName, setUserName, api, apiUpload, openSSE, fetchTemplates, fetchApiVersion } from './api.js?v=20260507j';
 import {
   showLoading, hideLoading, showError,
   updateNavBar,
@@ -7,7 +7,7 @@ import {
   renderQuestions, renderResponses, updateRespProgress,
   setReportFormat, renderFindings, renderGovFindings,
   renderSessionHistory,
-} from './ui.js?v=20260507i';
+} from './ui.js?v=20260507j';
 
 // Textarea auto-resize helper（供 renderQuestions oninput 呼叫）
 window._autoResizeTA = function(el) {
@@ -22,6 +22,7 @@ let selectedTemplate = null;
 // ─── Init ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   getApiKey();  // 確保 key 存在
+  showApiVersion();
 
   // 初始化使用者名稱欄位
   const unameEl = document.getElementById('user-name-input');
@@ -33,6 +34,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([loadFrameworks(), loadTemplates()]);
   setupCharCounters();
 });
+
+async function showApiVersion() {
+  const el = document.getElementById('api-version');
+  if (!el) return;
+  try {
+    const info = await fetchApiVersion();
+    if (!info) {
+      el.textContent = 'API: old/unknown';
+      el.classList.replace('text-gray-400', 'text-red-500');
+      return;
+    }
+    el.textContent = `API v${info.version} / ${info.question_generator}`;
+    if (info.question_generator !== 'rules') {
+      el.classList.replace('text-gray-400', 'text-amber-600');
+    }
+  } catch (_) {
+    el.textContent = 'API: unreachable';
+    el.classList.replace('text-gray-400', 'text-red-500');
+  }
+}
 
 // ─── Step Navigation ─────────────────────────────────────────────
 function goToStep(n) {
@@ -216,6 +237,9 @@ async function goStep2Next() {
     await api('POST', `/sessions/${S.sessionId}/scope`, { scope, context });
     const res = await api('POST', `/sessions/${S.sessionId}/questions/generate`);
     S.questions = normalizeQuestions(res.questions || []);
+    if (S.questions.length === 0) {
+      S.questions = buildFallbackQuestions(scope, context);
+    }
     renderQuestions();
     goToStep(3);
   } catch (e) {
@@ -244,6 +268,36 @@ function normalizeQuestions(questions) {
       dimension: q.dimension || 'systemic',
     };
   }).filter(q => q.text.trim().length > 0);
+}
+
+function buildFallbackQuestions(scope, context) {
+  const frameworkNames = S.frameworks
+    .map(id => allFrameworks.find(fw => fw.id === id)?.name || id)
+    .filter(Boolean);
+  const source = frameworkNames[0] || '資通安全管理法';
+  const baseContext = [scope, context].filter(Boolean).join(' ');
+  const texts = [
+    `請說明本次稽核範圍內，${source}相關要求如何被轉換成內部制度、流程或控制措施，並提供最近一次核准或修訂紀錄。`,
+    '請說明受查單位如何盤點重要資訊資產、系統、資料與委外服務，並確認盤點結果仍符合目前業務與法規要求。',
+    '請說明資通安全權責分工、核決層級與例外處理流程，並提供實際執行或會議追蹤紀錄。',
+    '請說明帳號、權限與特權存取如何申請、異動、定期複核與停用，並提供抽樣佐證。',
+    '請說明系統變更、版本發布或設定調整前，如何進行風險評估、測試、核准與回復準備。',
+    '請說明日誌、監控告警與異常事件如何被蒐集、檢視、分級與追蹤結案，並提供近期案例。',
+    '請說明資安事件通報、應變、復原與事後檢討流程，並提供最近一次演練或事件處理紀錄。',
+    '請說明委外廠商或雲端服務如何納入資安要求、服務水準、稽核權與問題改善追蹤。',
+    '請說明備份、復原、營運持續或災害復原措施如何設計與測試，並提供測試結果與改善項目。',
+    '請說明教育訓練、政策宣導與人員遵循情形如何追蹤，並說明未完成或違規情形的處置方式。',
+  ];
+
+  return texts.map((text, index) => ({
+    id: crypto.randomUUID(),
+    text: baseContext ? `${text}\n\n本題請聚焦：${baseContext}` : text,
+    category: index === 7 ? '委外管理' : '資安治理',
+    source_framework: source,
+    reference: index === 7 ? '委外與供應鏈管理' : '稽核控制要求',
+    dimension: '系統性探詢',
+    generated_by: 'frontend_fallback',
+  }));
 }
 
 function questionText(q) {

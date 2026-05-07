@@ -38,6 +38,12 @@ export async function api(method, path, body) {
   return res.json();
 }
 
+export async function fetchApiVersion() {
+  const res = await fetch(`${API_BASE}/api/version`, { cache: 'no-store' });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function apiUpload(path, file) {
   const fd = new FormData();
   fd.append('file', file);

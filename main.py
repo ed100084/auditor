@@ -9,7 +9,10 @@ from config import settings
 from dependencies.auth import verify_api_key
 from routers import session, framework, questions, responses, findings, templates
 
-app = FastAPI(title="資安稽核助手 API", version="1.0.0")
+APP_VERSION = "2026.05.07.7"
+QUESTION_GENERATOR = "rules"
+
+app = FastAPI(title="資安稽核助手 API", version=APP_VERSION)
 
 
 # 靜態 JS 檔案不快取，確保部署後使用者立即取得新版
@@ -33,6 +36,14 @@ app.add_middleware(
 
 # Auth dependency applied to all /api/ routes
 api_auth = [Depends(verify_api_key)]
+
+
+@app.get("/api/version")
+def api_version():
+    return {
+        "version": APP_VERSION,
+        "question_generator": QUESTION_GENERATOR,
+    }
 
 app.include_router(framework.list_router, prefix="/api", dependencies=api_auth)
 app.include_router(session.router, prefix="/api", dependencies=api_auth)
