@@ -5,288 +5,127 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資安稽核助手</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/app.css?v=20260507k">
+  <link rel="stylesheet" href="css/app.css?v=20260508a">
 </head>
-<body class="bg-gray-50 min-h-screen">
-
-<!-- Header -->
-<header class="bg-white border-b border-gray-200 px-6 py-4">
-  <div class="max-w-4xl mx-auto flex items-center gap-3">
-    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">稽</div>
-    <h1 class="text-xl font-semibold text-gray-900">資安稽核助手</h1>
-    <span id="app-version" class="text-xs font-medium text-gray-400" title="Build version">v2026.05.07.8</span>
-    <span id="api-version" class="text-xs font-medium text-gray-400" title="API version">API: checking</span>
-    <span class="ml-auto flex items-center gap-3">
-      <label class="flex items-center gap-1.5 text-sm text-gray-500">
+<body class="min-h-screen bg-gray-50 text-gray-900">
+  <header class="border-b border-gray-200 bg-white">
+    <div class="mx-auto flex max-w-6xl items-center gap-4 px-6 py-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">稽</div>
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-baseline gap-3">
+          <h1 class="text-xl font-semibold">資安稽核助手</h1>
+          <span id="app-version" class="text-xs font-medium text-gray-500">v2026.05.08.1</span>
+          <span id="api-version" class="text-xs font-medium text-gray-500">API: checking</span>
+        </div>
+        <p id="runtime-status" class="mt-1 text-xs text-gray-500">規則題庫模式，不依賴 LLM 產生稽核問題。</p>
+      </div>
+      <label class="ml-auto flex items-center gap-2 text-sm text-gray-600">
         稽核員：
-        <input id="user-name-input" type="text" placeholder="輸入姓名" maxlength="30"
-          class="border border-gray-300 rounded px-2 py-1 text-sm w-28 focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input id="user-name-input" class="w-36 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" maxlength="30" placeholder="輸入姓名">
       </label>
-      <button onclick="showMyAudits()" class="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 transition-colors">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        我的紀錄
-      </button>
-    </span>
-  </div>
-</header>
-
-<!-- Step Navigator -->
-<div class="bg-white border-b border-gray-100 px-6 py-3">
-  <div class="max-w-4xl mx-auto flex items-center gap-2 text-sm">
-    <div id="nav-1" class="flex items-center gap-1.5 cursor-pointer" onclick="goToStep(1)">
-      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium current">1</span>
-      <span class="text-gray-600">選擇框架</span>
     </div>
-    <div class="w-8 h-px bg-gray-200"></div>
-    <div id="nav-2" class="flex items-center gap-1.5 cursor-pointer" onclick="goToStep(2)">
-      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium pending">2</span>
-      <span class="text-gray-400">稽核範圍</span>
-    </div>
-    <div class="w-8 h-px bg-gray-200"></div>
-    <div id="nav-3" class="flex items-center gap-1.5 cursor-pointer" onclick="goToStep(3)">
-      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium pending">3</span>
-      <span class="text-gray-400">稽核問題</span>
-    </div>
-    <div class="w-8 h-px bg-gray-200"></div>
-    <div id="nav-4" class="flex items-center gap-1.5 cursor-pointer" onclick="goToStep(4)">
-      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium pending">4</span>
-      <span class="text-gray-400">受稽回覆</span>
-    </div>
-    <div class="w-8 h-px bg-gray-200"></div>
-    <div id="nav-5" class="flex items-center gap-1.5">
-      <span class="step-indicator w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium pending">5</span>
-      <span class="text-gray-400">稽核發現</span>
-    </div>
-  </div>
-</div>
+  </header>
 
-<main class="max-w-4xl mx-auto px-6 py-8">
+  <nav class="border-b border-gray-100 bg-white">
+    <div id="step-nav" class="mx-auto flex max-w-6xl items-center gap-3 overflow-x-auto px-6 py-3 text-sm"></div>
+  </nav>
 
-  <!-- STEP 1: Framework Selection -->
-  <div id="step-1" class="step-panel active">
-    <h2 class="text-lg font-semibold text-gray-900 mb-1">選擇稽核法規框架</h2>
-    <p class="text-sm text-gray-500 mb-6">台灣資通安全法規為主要框架（預設勾選），ISO 標準為輔助。可加選或上傳自訂法規文件。</p>
-
-    <!-- 範本選擇區 -->
-    <div class="border border-gray-200 rounded-lg mb-6 overflow-hidden">
-      <button type="button" onclick="toggleTemplatePanel()"
-        class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
-        <div class="flex items-center gap-2">
-          <svg class="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-          </svg>
-          <span class="text-sm font-medium text-gray-700">快速套用稽核情境範本</span>
-          <span class="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded">19 個</span>
-        </div>
-        <svg id="template-arrow" class="w-4 h-4 text-gray-400 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-        </svg>
-      </button>
-
-      <div id="template-panel" class="hidden px-4 pb-4 pt-3 bg-white">
-        <p class="text-xs text-gray-400 mb-3">選擇範本後將自動帶入建議框架、責任等級、稽核範圍與情境說明，可在後續步驟自行調整。</p>
-
-        <!-- 已套用 banner -->
-        <div id="template-applied-banner" class="hidden mb-3 flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
-          <span class="text-xs text-indigo-700">
-            ✓ 已套用：<strong id="template-applied-name"></strong>
-          </span>
-          <button type="button" onclick="clearTemplate()" class="text-xs text-indigo-500 hover:text-indigo-700 underline">清除</button>
-        </div>
-
-        <div id="template-grid" class="space-y-4">
-          <!-- Populated by JS -->
-          <p class="text-sm text-gray-400 text-center py-4">載入範本中...</p>
-        </div>
+  <main class="mx-auto max-w-6xl px-6 py-8">
+    <section id="step-1" class="step-panel active">
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold">選擇稽核框架</h2>
+        <p class="mt-1 text-sm text-gray-500">預設勾選台灣資安法規主框架，可自行調整。</p>
       </div>
-    </div>
-
-    <div id="framework-list" class="space-y-3 mb-6">
-      <!-- Populated by JS -->
-    </div>
-
-    <!-- Responsibility Level -->
-    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-      <label class="block text-sm font-medium text-gray-700 mb-2">受稽單位責任等級（選填）</label>
-      <select id="resp-level" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="">-- 不指定 --</option>
-        <option value="A">A 級（國家安全、全國性重要服務）</option>
-        <option value="B">B 級（核心技術機關、關鍵基礎設施）</option>
-        <option value="C">C 級（一般政府機關）</option>
-        <option value="D">D 級</option>
-        <option value="E">E 級（小型機關）</option>
-      </select>
-      <p class="text-xs text-gray-400 mt-1">指定等級後，系統將依該等級的適用控制要求產生問題</p>
-    </div>
-
-    <!-- Custom file upload -->
-    <div id="custom-upload-section" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-      <label class="block text-sm font-medium text-blue-800 mb-2">上傳自訂法規文件</label>
-      <input type="file" id="custom-file" accept=".txt,.pdf,.docx" class="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200">
-      <p class="text-xs text-gray-500 mt-1">支援 .txt .pdf .docx，上限 10MB</p>
-      <div id="upload-status" class="mt-2 text-xs text-green-600 hidden"></div>
-    </div>
-
-    <button onclick="goStep1Next()" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-      下一步：設定稽核範圍 →
-    </button>
-  </div>
-
-  <!-- STEP 2: Scope Input -->
-  <div id="step-2" class="step-panel">
-    <h2 class="text-lg font-semibold text-gray-900 mb-1">設定稽核範圍與情境</h2>
-    <p class="text-sm text-gray-500 mb-6">描述越具體，AI 產生的問題越精準。</p>
-
-    <div class="space-y-5">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">稽核範圍 <span class="text-red-500">*</span></label>
-        <textarea id="scope-input" rows="3" placeholder="例如：資訊服務委外管理、存取控制作業、事件應變機制、人員教育訓練..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
-        <div class="flex justify-between mt-1">
-          <span class="text-xs text-gray-400">請描述本次稽核的主要範圍（系統、流程或功能）</span>
-          <span id="scope-count" class="text-xs text-gray-400">0 字</span>
-        </div>
+      <div id="framework-list" class="grid gap-3 md:grid-cols-2"></div>
+      <div class="mt-6 rounded-lg border border-gray-200 bg-white p-4">
+        <label class="block text-sm font-medium text-gray-700">受稽單位責任等級</label>
+        <select id="resp-level" class="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">不指定</option>
+          <option value="A">A 級</option>
+          <option value="B">B 級</option>
+          <option value="C">C 級</option>
+          <option value="D">D 級</option>
+          <option value="E">E 級</option>
+        </select>
       </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">稽核情境 / 背景說明 <span class="text-red-500">*</span></label>
-        <textarea id="context-input" rows="4" placeholder="例如：年度例行稽核，重點關注 2023 年新增之雲端服務委外採購流程是否符合資通安全管理法第 15 條委外管理規定，以及廠商資安能力驗證機制..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
-        <div class="flex justify-between mt-1">
-          <span class="text-xs text-gray-400">提供背景脈絡，幫助 AI 理解稽核重點</span>
-          <span id="context-count" class="text-xs text-gray-400">0 字</span>
-        </div>
+      <div class="mt-6 flex justify-end">
+        <button id="step1-next" class="rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700">下一步：稽核範圍</button>
       </div>
-    </div>
+    </section>
 
-    <div class="flex gap-3 mt-6">
-      <button onclick="goToStep(1)" class="px-5 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">← 上一步</button>
-      <button onclick="goStep2Next()" class="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-        產生稽核問題 →
-      </button>
-    </div>
-  </div>
-
-  <!-- STEP 3: Question Editor -->
-  <div id="step-3" class="step-panel">
-    <div class="flex items-center justify-between mb-4">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900">稽核問題清單</h2>
-        <p class="text-sm text-gray-500">可新增、刪除或編輯問題，確認後進入下一步</p>
+    <section id="step-2" class="step-panel">
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold">設定稽核範圍與情境</h2>
+        <p class="mt-1 text-sm text-gray-500">這些文字會直接放進每一題，讓問題貼近本次稽核。</p>
       </div>
-      <span id="q-count-badge" class="bg-blue-100 text-blue-700 text-sm font-medium px-3 py-1 rounded-full">0 題</span>
-    </div>
-
-    <div id="question-list" class="space-y-3 mb-6">
-      <!-- Populated by JS -->
-    </div>
-
-    <button onclick="addQuestion()" class="w-full border-2 border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors mb-6">
-      + 新增問題
-    </button>
-
-    <div class="flex gap-3">
-      <button onclick="goToStep(2)" class="px-5 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">← 上一步</button>
-      <button onclick="goStep3Next()" class="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-        進入受稽回覆 →
-      </button>
-    </div>
-  </div>
-
-  <!-- STEP 4: Responses -->
-  <div id="step-4" class="step-panel">
-    <div class="flex items-center justify-between mb-4">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900">輸入受稽單位回覆</h2>
-        <p class="text-sm text-gray-500">依序輸入受稽單位對每個問題的回覆</p>
-      </div>
-      <span id="resp-progress" class="text-sm font-medium text-gray-600">已回覆 0 / 0</span>
-    </div>
-
-    <div id="response-list" class="space-y-5 mb-6">
-      <!-- Populated by JS -->
-    </div>
-
-    <!-- Report Format Selector -->
-    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-      <p class="text-sm font-semibold text-gray-700 mb-3">稽核發現報告格式</p>
-      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <label id="fmt-iia5c" class="flex items-start gap-3 p-3 rounded-lg border-2 border-blue-500 bg-blue-50 cursor-pointer">
-          <input type="radio" name="report-format" value="iia5c" checked class="mt-0.5 accent-blue-600" onchange="setReportFormat(this.value)">
-          <div>
-            <p class="text-sm font-semibold text-gray-800">IIA 5C 格式</p>
-            <p class="text-xs text-gray-500 mt-0.5">現況・準則・原因・影響・建議，含法源依據與應辦事項</p>
-          </div>
+      <div class="grid gap-5">
+        <label class="block">
+          <span class="text-sm font-medium text-gray-700">稽核範圍</span>
+          <textarea id="scope-input" rows="4" class="mt-2 w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如：資訊服務委外管理、存取控制、日誌監控、備份復原。"></textarea>
         </label>
-        <label id="fmt-gov" class="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 bg-white cursor-pointer">
-          <input type="radio" name="report-format" value="gov" class="mt-0.5 accent-blue-600" onchange="setReportFormat(this.value)">
-          <div>
-            <p class="text-sm font-semibold text-gray-800">政府機關格式</p>
-            <p class="text-xs text-gray-500 mt-0.5">法規不符合・待改善缺失・建議缺失，含應辦事項法條原文（衛福部/數位部 CI 稽核格式）</p>
-          </div>
+        <label class="block">
+          <span class="text-sm font-medium text-gray-700">稽核情境 / 背景說明</span>
+          <textarea id="context-input" rows="5" class="mt-2 w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如：年度例行稽核，重點確認制度、權限、委外合約與事件應變是否落實。"></textarea>
         </label>
       </div>
-    </div>
-
-    <div class="flex gap-3">
-      <button onclick="goToStep(3)" class="px-5 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">← 上一步</button>
-      <button onclick="goStep4Next()" class="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-medium hover:bg-green-700 transition-colors">
-        產生稽核發現 →
-      </button>
-    </div>
-  </div>
-
-  <!-- STEP 5: Findings -->
-  <div id="step-5" class="step-panel">
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900">稽核發現報告</h2>
-        <p id="findings-format-label" class="text-sm text-gray-500">依 IIA 5C 格式呈現，含法源依據及應辦事項</p>
+      <div class="mt-6 flex gap-3">
+        <button data-go-step="1" class="rounded-lg border border-gray-300 px-6 py-3 text-sm text-gray-700 hover:bg-gray-50">上一步</button>
+        <button id="generate-questions" class="flex-1 rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700">產生稽核問題</button>
       </div>
-      <button onclick="startNewAudit()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">重新稽核</button>
-    </div>
+    </section>
 
-    <!-- Executive Summary -->
-    <div id="exec-summary" class="bg-gray-50 border border-gray-200 rounded-lg p-5 mb-6 hidden">
-      <h3 class="text-sm font-semibold text-gray-700 mb-2">執行摘要</h3>
-      <div id="exec-summary-text" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed"></div>
-    </div>
+    <section id="step-3" class="step-panel">
+      <div class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold">稽核問題清單</h2>
+          <p id="question-source" class="mt-1 text-sm text-gray-500">可新增、刪除或編輯問題。</p>
+        </div>
+        <span id="q-count-badge" class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">0 題</span>
+      </div>
+      <div id="question-list" class="space-y-3"></div>
+      <button id="add-question" class="mt-4 w-full rounded-lg border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600">+ 新增問題</button>
+      <div class="mt-6 flex gap-3">
+        <button data-go-step="2" class="rounded-lg border border-gray-300 px-6 py-3 text-sm text-gray-700 hover:bg-gray-50">上一步</button>
+        <button id="save-questions" class="flex-1 rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700">進入受稽回覆</button>
+      </div>
+    </section>
 
-    <!-- Findings List -->
-    <div id="findings-list" class="space-y-4">
-      <!-- Populated by JS -->
-    </div>
-  </div>
+    <section id="step-4" class="step-panel">
+      <div class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold">受稽回覆</h2>
+          <p class="mt-1 text-sm text-gray-500">逐題填入回覆，系統會用這些內容產生稽核發現。</p>
+        </div>
+        <span id="resp-progress" class="text-sm font-medium text-gray-600">已回覆 0 / 0</span>
+      </div>
+      <div id="response-list" class="space-y-4"></div>
+      <div class="mt-6 flex gap-3">
+        <button data-go-step="3" class="rounded-lg border border-gray-300 px-6 py-3 text-sm text-gray-700 hover:bg-gray-50">上一步</button>
+        <button id="generate-findings" class="flex-1 rounded-lg bg-green-600 px-6 py-3 text-sm font-medium text-white hover:bg-green-700">產生稽核發現</button>
+      </div>
+    </section>
 
-  <!-- Loading Overlay -->
-  <div id="loading-overlay" class="hidden fixed inset-0 bg-white/80 flex items-center justify-center z-50">
+    <section id="step-5" class="step-panel">
+      <div class="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold">稽核發現</h2>
+          <p id="findings-status" class="mt-1 text-sm text-gray-500">依受稽回覆產生。</p>
+        </div>
+        <button id="new-audit" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">重新稽核</button>
+      </div>
+      <div id="findings-list" class="space-y-4"></div>
+    </section>
+  </main>
+
+  <div id="loading-overlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-white/80">
     <div class="text-center">
       <div class="spinner mx-auto mb-4"></div>
-      <p id="loading-text" class="text-gray-600 font-medium">處理中...</p>
-      <p class="text-sm text-gray-400 mt-1">請稍候</p>
+      <p id="loading-text" class="font-medium text-gray-700">處理中...</p>
     </div>
   </div>
 
-  <!-- Error Toast -->
-  <div id="error-toast" class="hidden fixed bottom-6 right-6 bg-red-600 text-white px-5 py-3 rounded-lg shadow-lg z-50 max-w-sm">
-    <p id="error-text" class="text-sm"></p>
-  </div>
+  <div id="error-toast" class="hidden fixed bottom-6 right-6 z-50 max-w-sm rounded-lg bg-red-600 px-5 py-3 text-sm text-white shadow-lg"></div>
 
-</main>
-
-<!-- 稽核歷史紀錄側邊板 -->
-<div id="history-overlay" onclick="closeHistory()"></div>
-<aside id="history-panel" class="p-6">
-  <div class="flex items-center justify-between mb-4">
-    <h2 id="history-user-label" class="text-base font-semibold text-gray-900">我的稽核紀錄</h2>
-    <button onclick="closeHistory()" class="text-gray-400 hover:text-gray-600 transition-colors">
-      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-    </button>
-  </div>
-  <div id="history-list" class="space-y-3">
-    <!-- Populated by JS -->
-  </div>
-</aside>
-
-<script type="module" src="js/main.js?v=20260507k"></script>
+  <script type="module" src="js/app.js?v=20260508a"></script>
 </body>
 </html>

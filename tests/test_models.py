@@ -48,7 +48,11 @@ def test_question_dict_round_trip():
         "reference": "A.8.2",
     }
     q = Question(**data)
-    assert q.model_dump() == data
+    dumped = q.model_dump()
+    for key, value in data.items():
+        assert dumped[key] == value
+    assert dumped["dimension"] == "systemic"
+    assert dumped["bank_id"] == ""
 
 
 # ─── Finding ─────────────────────────────────────────────────────
