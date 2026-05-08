@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.9';
+const VERSION = '2026.05.08.10';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -560,8 +560,7 @@ async function generateQuestions() {
 function adaptQuestionsToSettings(questions) {
   const count = getQuestionCount();
   const local = buildLocalQuestions(getScope(), getContext());
-  const template = currentTemplate();
-  const merged = (template ? [...local, ...questions] : [...questions, ...local]).slice(0, count);
+  const merged = [...local, ...questions].slice(0, count);
   return merged.map((question, index) => enrichQuestion(question, selectedDimensions()[index % selectedDimensions().length]));
 }
 
@@ -871,27 +870,33 @@ function buildLocalQuestions(scope, context) {
   const template = currentTemplate(scope, context);
   if (template) return buildTemplateQuestions(template, scope, context);
 
-  const source = selectedFrameworkNames()[0] || '資通安全管理法';
+  const source = selectedFrameworkNames()[0] || '稽核框架';
   const focus = [scope, context].filter(Boolean).join(' ');
   const dimensions = selectedDimensions();
   const count = getQuestionCount();
   const base = [
-    ['治理與合規', '稽核控制要求', `請說明本次稽核範圍內，${source}相關要求如何轉換成內部制度、流程或控制措施。`],
-    ['資產盤點', '資產與資料管理', '請說明受查單位如何盤點資訊資產、系統、資料與委外服務，並確認盤點結果仍符合目前業務與法規要求。'],
-    ['權責分工', '資安治理', '請說明資通安全權責分工、核決層級與例外處理流程，並提供實際執行或會議追蹤紀錄。'],
-    ['存取控制', '帳號權限管理', '請說明帳號、權限與特權存取如何申請、異動、定期複核與停用，並提供抽樣佐證。'],
-    ['變更管理', '系統維運', '請說明系統變更、版本發布或設定調整前，如何進行風險評估、測試、核准與回復準備。'],
-    ['監控與日誌', '日誌管理', '請說明日誌、監控告警與異常事件如何蒐集、檢視、分級與追蹤結案。'],
-    ['事件應變', '通報及應變', '請說明資安事件通報、應變、復原與事後檢討流程，並提供最近一次演練或事件處理紀錄。'],
-    ['委外管理', '委外與供應鏈管理', '請說明委外廠商或雲端服務如何納入資安要求、服務水準、稽核權與問題改善追蹤。'],
-    ['備份復原', '營運持續', '請說明備份、復原、營運持續或災害復原措施如何設計與測試，並提供測試結果與改善項目。'],
-    ['教育訓練', '人員認知訓練', '請說明教育訓練、政策宣導與人員遵循情形如何追蹤，並說明未完成或違規情形的處置方式。'],
-    ['弱點管理', '修補與風險接受', '請說明弱點掃描、修補期限、例外核准與風險接受如何管理，並提供逾期追蹤紀錄。'],
-    ['雲端安全', '雲端設定基準', '請說明雲端帳號、公開資源、日誌監控與設定基準如何管控，並提供最近一次檢核結果。'],
+    ['日常作業', '實際流程', '這件事平常是誰在做？從提出需求到完成紀錄，實際流程通常怎麼走？請用最近一次案例說明。'],
+    ['責任分工', '角色與交接', '哪些角色會參與這個流程？如果主要負責人請假或離職，誰接手、怎麼確認不中斷？'],
+    ['資料來源', '清冊與母體', '你們用哪一份清冊或系統當作管理母體？它多久更新一次，誰負責確認內容是最新的？'],
+    ['抽樣佐證', '抽樣方式', '如果我要抽 5 筆樣本，你建議從哪裡抽？每一筆可以看到哪些申請、核准、執行與覆核紀錄？'],
+    ['例外處理', '例外與逾期', '最近一年有沒有例外、逾期或做不到標準流程的情況？當時怎麼核准、補救與追蹤？'],
+    ['權限與存取', '最小權限', '誰可以異動資料、設定或流程狀態？高權限操作有沒有留下可追溯紀錄？'],
+    ['監控告警', '異常發現', '如果流程失敗、資料異常或有人未依規定操作，你們通常怎麼發現？誰會收到通知？'],
+    ['改善追蹤', '缺失管理', '上次發現問題後，改善項目怎麼列管？誰確認已完成，怎麼避免同樣問題再發生？'],
+    ['委外協作', '第三方作業', '如果有廠商或其他單位參與，他們能做什麼、不能做什麼？維護或交付結果怎麼驗收？'],
+    ['資料保護', '資料流向', '這個流程會接觸哪些個資、機敏資料或重要資料？資料從哪裡來、到哪裡去、誰可以匯出？'],
+    ['營運中斷', '備援處理', '如果系統或人員暫時不可用，業務怎麼繼續？最近一次演練或實際中斷後有沒有調整作法？'],
+    ['管理回報', '管理監督', '主管平常看哪些報表或指標來判斷這件事有沒有做好？異常會不會被帶到會議追蹤？'],
+    ['工具設定', '系統控制', '有哪些檢核是靠系統自動做的？哪些仍靠人工判斷？人工判斷有沒有留下理由與覆核紀錄？'],
+    ['教育認知', '人員落實', '實際操作的人怎麼知道要照這套方式做？新人、外包或輪調人員怎麼被訓練？'],
+    ['歷史事件', '近一年案例', '請挑一個近一年最有代表性的案例，說明從發現、處理、核准、結案到追蹤的完整過程。'],
+    ['風險判斷', source, `就本次選定的 ${source} 來看，現場最擔心哪三個失控情境？目前各自靠什麼控制降低風險？`],
+    ['邊界確認', '範圍界線', '有哪些系統、流程、資料或單位容易被誤以為有納管，但實際上不在這次管理範圍內？'],
+    ['稽核切入', '可驗證性', '如果只能花一天抽核，你會建議我優先看哪三個證據點，最能判斷控制是否真的有運作？'],
   ];
   return base.slice(0, count).map(([category, reference, text], index) => {
     const dimension = dimensions[index % dimensions.length];
-    const focused = focus ? `${text}\n\n本題請聚焦：${focus}` : text;
+    const focused = focus ? `${text}\n\n本題聚焦場景：${focus}` : text;
     return enrichQuestion(makeQuestion(focused, category, source, reference, dimension.label), dimension);
   });
 }
@@ -910,32 +915,38 @@ function buildTemplateQuestions(template, scope, context) {
   const frameworkNames = template.frameworks
     .map(id => FRAMEWORKS.find(item => item.id === id)?.name || id)
     .filter(Boolean);
-  const source = frameworkNames[0] || selectedFrameworkNames()[0] || '資通安全管理法';
+  const source = frameworkNames[0] || selectedFrameworkNames()[0] || '稽核框架';
   const scopeText = scope || template.scope;
   const contextText = context || template.context;
   const target = `${template.name}（${template.category}）`;
   const frameworkText = frameworkNames.length ? frameworkNames.join('、') : source;
   const base = [
-    ['範圍確認', template.category, `針對「${target}」，請說明本次稽核涵蓋的系統、流程、資料、外部單位與排除項目，並說明範圍如何對應實際業務風險。`],
-    ['制度與責任', '治理制度', `請說明「${target}」相關政策、程序、權責分工、核准層級與定期檢討機制，並說明最近一次更新或檢討結果。`],
-    ['控制執行', '流程執行', `請說明受查單位如何實際執行「${scopeText}」相關控制，包括執行頻率、負責角色、使用工具、例外處理與追蹤方式。`],
-    ['佐證抽核', '佐證文件', `請列出可證明「${target}」控制有效運作的佐證資料，例如清冊、紀錄、截圖、工單、合約、報表或演練紀錄，並說明抽樣母體。`],
-    ['法規框架', frameworkText, `請說明「${target}」如何符合 ${frameworkText} 的要求，若有未適用或替代控制，請說明理由、核准紀錄與風險接受方式。`],
-    ['例外改善', '例外管理', `針對「${target}」，請說明近一年發現的缺失、例外、逾期項目或改善計畫，包含負責窗口、期限與改善成效驗證。`],
-    ['監控追蹤', '監控與回報', `請說明「${target}」是否有日常監控、管理報表、告警或定期回報機制，異常情形如何分級、派工與結案。`],
-    ['第三方關係', '委外與供應鏈', `若「${target}」涉及委外、雲端、維護廠商或跨單位作業，請說明合約要求、存取控管、稽核權、通報義務與改善追蹤。`],
-    ['資料保護', '資料安全', `請說明「${target}」涉及的個資、機敏資料或重要營運資料如何分類、授權、加密、傳輸、留存、刪除與防止未授權外流。`],
-    ['營運持續', '復原能力', `請說明「${target}」在異常、中斷、資安事件或系統故障時的應變、復原、替代作業與演練驗證方式。`],
-    ['人員認知', '教育訓練', `請說明參與「${target}」的人員是否接受必要訓練或宣導，如何確認其理解作業要求與違規處理方式。`],
-    ['有效性確認', '稽核判斷', `請說明管理階層如何確認「${target}」控制措施持續有效，包含指標、抽查、內部稽核、外部檢查或改善追蹤會議。`],
+    ['現場流程', template.category, `以「${target}」來看，現場每天或每週實際怎麼執行？請從最近一次真實作業開始講，不要只描述制度。`],
+    ['責任分工', '角色與交接', `誰是「${target}」的主要負責人、覆核人與備援人員？如果發生例外，誰有權決定怎麼處理？`],
+    ['管理母體', '清冊與範圍', `這次範圍提到「${scopeText}」。你們實際用哪份清冊、系統或報表確認所有對象都有納入管理？`],
+    ['抽樣路徑', '稽核佐證', `如果我現在抽一筆樣本，從哪裡可以一路看到申請、核准、執行、覆核與結案？哪些證據最可靠？`],
+    ['例外情境', '例外處理', `最近一年「${target}」有沒有例外、逾期、未照流程或緊急處理？請挑一個案例說明怎麼核准與補救。`],
+    ['失敗偵測', '監控與告警', `如果「${target}」沒有被正確執行，誰會知道？靠系統告警、人工檢查、使用者回報，還是事後才發現？`],
+    ['改善追蹤', '缺失改善', `過去針對「${target}」被指出的問題，現在改善到哪裡？誰驗證有效，多久後再回頭確認？`],
+    ['權限邊界', '存取控制', `哪些人可以修改「${target}」相關設定、紀錄或結果？高權限操作是否能追到人、時間與原因？`],
+    ['資料流向', '資料保護', `這個範本情境會碰到哪些資料？資料如何取得、保存、傳送、匯出與刪除？哪個環節最容易失控？`],
+    ['委外介面', '第三方作業', `如果有廠商、雲端或跨單位參與，他們實際做哪一段？你們怎麼驗收交付結果與追蹤問題？`],
+    ['中斷應變', '營運持續', `如果「${target}」相關系統、廠商或關鍵人員暫時不可用，現場怎麼繼續作業？最近有沒有測過？`],
+    ['管理回報', '主管監督', `主管平常用什麼資訊判斷「${target}」有沒有穩定運作？哪些異常會被升級或列入會議追蹤？`],
+    ['工具限制', '系統設定', `目前有哪些控制靠系統自動完成？哪些還是人工處理？人工處理最常出錯的地方是什麼？`],
+    ['人員落實', '教育與宣導', `實際操作人員怎麼知道這件事該怎麼做？新人、輪調人員或外包人員有沒有被確認學會？`],
+    ['風險判斷', frameworkText, `先不談條文，站在現場角度，「${target}」最可能造成重大影響的三個失控情境是什麼？目前怎麼防？`],
+    ['邊界灰區', '範圍外風險', `有沒有任何系統、資料、廠商或流程處在灰色地帶，大家以為有人管，但實際責任不清？`],
+    ['近期案例', '案例追問', `請選一個最能代表「${target}」的近期案例，帶我看完整紀錄，包含誰提出、誰核准、誰執行、誰覆核。`],
+    ['稽核優先順序', '可驗證性', `如果只能優先抽核三個點，你認為哪三個最能看出「${target}」是真的有運作，而不是只有文件？`],
   ];
 
   return base.slice(0, count).map(([category, reference, text], index) => {
     const dimension = dimensions[index % dimensions.length];
     const focused = [
       text,
-      `範本情境：${contextText}`,
-      `稽核範圍：${scopeText}`,
+      `情境背景：${contextText}`,
+      `本次範圍：${scopeText}`,
     ].join('\n\n');
     return enrichQuestion(makeQuestion(focused, category, target, reference, dimension.label), dimension);
   });
@@ -944,13 +955,13 @@ function buildTemplateQuestions(template, scope, context) {
 function enrichQuestion(question, dimension) {
   const depth = document.getElementById('question-depth')?.value || 'standard';
   const suffix = [];
-  if (dimension?.id === 'governance') suffix.push('請追問制度依據、權責分工、核准層級與定期檢討機制。');
-  if (dimension?.id === 'process') suffix.push('請追問實際流程、執行頻率、例外處理與追蹤方式。');
-  if (dimension?.id === 'technical') suffix.push('請追問系統設定、技術控制、自動化檢核與日誌留存。');
-  if (dimension?.id === 'evidence') suffix.push('請要求提供政策文件、紀錄、截圖、清單或抽樣證據。');
-  if (dimension?.id === 'exception') suffix.push('請追問未完成項目、風險接受、改善期限與負責窗口。');
-  if (depth === 'deep') suffix.push('請進一步追問近一年異常案例、管理層追蹤與改善有效性。');
-  if (depth === 'evidence') suffix.push('請明確列出稽核員應抽核的佐證種類與抽樣方向。');
+  if (dimension?.id === 'governance') suffix.push('追問重點：誰負責、誰覆核、誰能核准例外，以及主管怎麼知道這件事有做好。');
+  if (dimension?.id === 'process') suffix.push('追問重點：請受稽單位用一筆近期案例走一次流程，指出卡點與人工判斷處。');
+  if (dimension?.id === 'technical') suffix.push('追問重點：哪些地方靠系統自動控制，哪些地方仍靠人工，日誌能不能回放操作過程。');
+  if (dimension?.id === 'evidence') suffix.push('追問重點：請直接指出可抽核的母體、樣本、紀錄位置與判斷標準。');
+  if (dimension?.id === 'exception') suffix.push('追問重點：找出最近一次例外或逾期，確認原因、核准、補救與後續追蹤。');
+  if (depth === 'deep') suffix.push('深入追問：請比較「制度寫法」與「現場實際作法」的落差，並說明目前最大的未解風險。');
+  if (depth === 'evidence') suffix.push('佐證追問：請列出最適合抽核的三類證據，以及每類證據可以證明或不能證明什麼。');
   return {
     ...question,
     text: [question.text, ...suffix].join('\n'),
