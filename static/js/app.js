@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.8';
+const VERSION = '2026.05.08.9';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -274,7 +274,7 @@ function bindEvents() {
   document.getElementById('generate-questions').addEventListener('click', generateQuestions);
   document.getElementById('regenerate-questions').addEventListener('click', () => {
     state.questions = buildLocalQuestions(getScope(), getContext());
-    state.questionSource = 'frontend-settings';
+    state.questionSource = currentTemplate() ? 'template-settings' : 'frontend-settings';
     renderQuestions(false);
     schedulePersist('questions');
   });
@@ -546,6 +546,7 @@ async function generateQuestions() {
     if (!state.questionSource) state.questionSource = 'frontend-empty-response';
   } else {
     questions = adaptQuestionsToSettings(questions);
+    if (currentTemplate(scope, context)) state.questionSource = 'template-backend-rules';
   }
 
   state.questions = questions;
@@ -559,7 +560,8 @@ async function generateQuestions() {
 function adaptQuestionsToSettings(questions) {
   const count = getQuestionCount();
   const local = buildLocalQuestions(getScope(), getContext());
-  const merged = [...questions, ...local].slice(0, count);
+  const template = currentTemplate();
+  const merged = (template ? [...local, ...questions] : [...questions, ...local]).slice(0, count);
   return merged.map((question, index) => enrichQuestion(question, selectedDimensions()[index % selectedDimensions().length]));
 }
 
@@ -572,6 +574,10 @@ function renderQuestions(useGuard = true) {
   document.getElementById('question-source').textContent =
     state.questionSource === 'loaded-session'
       ? '來源：已載入先前同步紀錄。'
+      : state.questionSource === 'template-backend-rules'
+      ? '來源：已優先依常用範本產生，並補入後端規則題庫。'
+      : state.questionSource === 'template-settings'
+      ? '來源：已依常用範本、深度與面向重新產生。'
       : state.questionSource === 'backend-rules'
       ? '來源：後端規則題庫，已依深度與面向補強。'
       : '來源：前端規則題庫保底，已依深度與面向產生。';
@@ -862,6 +868,9 @@ function renderGovFindings() {
 }
 
 function buildLocalQuestions(scope, context) {
+  const template = currentTemplate(scope, context);
+  if (template) return buildTemplateQuestions(template, scope, context);
+
   const source = selectedFrameworkNames()[0] || '資通安全管理法';
   const focus = [scope, context].filter(Boolean).join(' ');
   const dimensions = selectedDimensions();
@@ -884,6 +893,51 @@ function buildLocalQuestions(scope, context) {
     const dimension = dimensions[index % dimensions.length];
     const focused = focus ? `${text}\n\n本題請聚焦：${focus}` : text;
     return enrichQuestion(makeQuestion(focused, category, source, reference, dimension.label), dimension);
+  });
+}
+
+function currentTemplate(scope = getScope(), context = getContext()) {
+  if (state.activeTemplate) {
+    const selected = TEMPLATES.find(item => item.id === state.activeTemplate);
+    if (selected) return selected;
+  }
+  return TEMPLATES.find(item => item.scope === scope && item.context === context) || null;
+}
+
+function buildTemplateQuestions(template, scope, context) {
+  const dimensions = selectedDimensions();
+  const count = getQuestionCount();
+  const frameworkNames = template.frameworks
+    .map(id => FRAMEWORKS.find(item => item.id === id)?.name || id)
+    .filter(Boolean);
+  const source = frameworkNames[0] || selectedFrameworkNames()[0] || '資通安全管理法';
+  const scopeText = scope || template.scope;
+  const contextText = context || template.context;
+  const target = `${template.name}（${template.category}）`;
+  const frameworkText = frameworkNames.length ? frameworkNames.join('、') : source;
+  const base = [
+    ['範圍確認', template.category, `針對「${target}」，請說明本次稽核涵蓋的系統、流程、資料、外部單位與排除項目，並說明範圍如何對應實際業務風險。`],
+    ['制度與責任', '治理制度', `請說明「${target}」相關政策、程序、權責分工、核准層級與定期檢討機制，並說明最近一次更新或檢討結果。`],
+    ['控制執行', '流程執行', `請說明受查單位如何實際執行「${scopeText}」相關控制，包括執行頻率、負責角色、使用工具、例外處理與追蹤方式。`],
+    ['佐證抽核', '佐證文件', `請列出可證明「${target}」控制有效運作的佐證資料，例如清冊、紀錄、截圖、工單、合約、報表或演練紀錄，並說明抽樣母體。`],
+    ['法規框架', frameworkText, `請說明「${target}」如何符合 ${frameworkText} 的要求，若有未適用或替代控制，請說明理由、核准紀錄與風險接受方式。`],
+    ['例外改善', '例外管理', `針對「${target}」，請說明近一年發現的缺失、例外、逾期項目或改善計畫，包含負責窗口、期限與改善成效驗證。`],
+    ['監控追蹤', '監控與回報', `請說明「${target}」是否有日常監控、管理報表、告警或定期回報機制，異常情形如何分級、派工與結案。`],
+    ['第三方關係', '委外與供應鏈', `若「${target}」涉及委外、雲端、維護廠商或跨單位作業，請說明合約要求、存取控管、稽核權、通報義務與改善追蹤。`],
+    ['資料保護', '資料安全', `請說明「${target}」涉及的個資、機敏資料或重要營運資料如何分類、授權、加密、傳輸、留存、刪除與防止未授權外流。`],
+    ['營運持續', '復原能力', `請說明「${target}」在異常、中斷、資安事件或系統故障時的應變、復原、替代作業與演練驗證方式。`],
+    ['人員認知', '教育訓練', `請說明參與「${target}」的人員是否接受必要訓練或宣導，如何確認其理解作業要求與違規處理方式。`],
+    ['有效性確認', '稽核判斷', `請說明管理階層如何確認「${target}」控制措施持續有效，包含指標、抽查、內部稽核、外部檢查或改善追蹤會議。`],
+  ];
+
+  return base.slice(0, count).map(([category, reference, text], index) => {
+    const dimension = dimensions[index % dimensions.length];
+    const focused = [
+      text,
+      `範本情境：${contextText}`,
+      `稽核範圍：${scopeText}`,
+    ].join('\n\n');
+    return enrichQuestion(makeQuestion(focused, category, target, reference, dimension.label), dimension);
   });
 }
 
