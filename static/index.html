@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>資安稽核助手</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/app.css?v=20260508a">
+  <link rel="stylesheet" href="css/app.css?v=20260508b">
 </head>
 <body class="min-h-screen bg-gray-50 text-gray-900">
   <header class="border-b border-gray-200 bg-white">
@@ -14,10 +14,10 @@
       <div class="min-w-0">
         <div class="flex flex-wrap items-baseline gap-3">
           <h1 class="text-xl font-semibold">資安稽核助手</h1>
-          <span id="app-version" class="text-xs font-medium text-gray-500">v2026.05.08.1</span>
+          <span id="app-version" class="text-xs font-medium text-gray-500">v2026.05.08.2</span>
           <span id="api-version" class="text-xs font-medium text-gray-500">API: checking</span>
         </div>
-        <p id="runtime-status" class="mt-1 text-xs text-gray-500">規則題庫模式，不依賴 LLM 產生稽核問題。</p>
+        <p id="runtime-status" class="mt-1 text-xs text-gray-500">問題以規則題庫為主，稽核發現可用 LLM 產生草稿。</p>
       </div>
       <label class="ml-auto flex items-center gap-2 text-sm text-gray-600">
         稽核員：
@@ -34,7 +34,7 @@
     <section id="step-1" class="step-panel active">
       <div class="mb-6">
         <h2 class="text-lg font-semibold">選擇稽核框架</h2>
-        <p class="mt-1 text-sm text-gray-500">預設勾選台灣資安法規主框架，可自行調整。</p>
+        <p class="mt-1 text-sm text-gray-500">可混選法規、ISO、產業情境與 IT 控制主題。</p>
       </div>
       <div id="framework-list" class="grid gap-3 md:grid-cols-2"></div>
       <div class="mt-6 rounded-lg border border-gray-200 bg-white p-4">
@@ -56,7 +56,14 @@
     <section id="step-2" class="step-panel">
       <div class="mb-6">
         <h2 class="text-lg font-semibold">設定稽核範圍與情境</h2>
-        <p class="mt-1 text-sm text-gray-500">這些文字會直接放進每一題，讓問題貼近本次稽核。</p>
+        <p class="mt-1 text-sm text-gray-500">可套用常用範本後再微調。</p>
+      </div>
+      <div class="mb-5 rounded-lg border border-gray-200 bg-white p-4">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <h3 class="text-sm font-semibold text-gray-800">常用範本</h3>
+          <button id="clear-template" class="text-xs text-gray-500 hover:text-blue-600">清除範本內容</button>
+        </div>
+        <div id="template-list" class="grid gap-2 md:grid-cols-2"></div>
       </div>
       <div class="grid gap-5">
         <label class="block">
@@ -78,9 +85,30 @@
       <div class="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 class="text-lg font-semibold">稽核問題清單</h2>
-          <p id="question-source" class="mt-1 text-sm text-gray-500">可新增、刪除或編輯問題。</p>
+          <p id="question-source" class="mt-1 text-sm text-gray-500">開放式問題，可依深度與面向重新產生。</p>
         </div>
         <span id="q-count-badge" class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">0 題</span>
+      </div>
+      <div class="mb-5 grid gap-4 rounded-lg border border-gray-200 bg-white p-4 lg:grid-cols-3">
+        <label class="block text-sm">
+          <span class="font-medium text-gray-700">問題深度</span>
+          <select id="question-depth" class="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="standard">標準稽核</option>
+            <option value="deep">深入追問</option>
+            <option value="evidence">佐證導向</option>
+          </select>
+        </label>
+        <label class="block text-sm">
+          <span class="font-medium text-gray-700">問題數量</span>
+          <input id="question-count" type="number" min="6" max="18" value="12" class="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </label>
+        <div class="text-sm">
+          <span class="font-medium text-gray-700">問題面向</span>
+          <div id="dimension-options" class="mt-2 flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+      <div class="mb-4 flex justify-end">
+        <button id="regenerate-questions" class="rounded-lg border border-blue-300 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50">依設定重新產生</button>
       </div>
       <div id="question-list" class="space-y-3"></div>
       <button id="add-question" class="mt-4 w-full rounded-lg border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600">+ 新增問題</button>
@@ -94,14 +122,14 @@
       <div class="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 class="text-lg font-semibold">受稽回覆</h2>
-          <p class="mt-1 text-sm text-gray-500">逐題填入回覆，系統會用這些內容產生稽核發現。</p>
+          <p class="mt-1 text-sm text-gray-500">每題提供快填片語，方便整理受稽單位說法與佐證。</p>
         </div>
         <span id="resp-progress" class="text-sm font-medium text-gray-600">已回覆 0 / 0</span>
       </div>
       <div id="response-list" class="space-y-4"></div>
       <div class="mt-6 flex gap-3">
         <button data-go-step="3" class="rounded-lg border border-gray-300 px-6 py-3 text-sm text-gray-700 hover:bg-gray-50">上一步</button>
-        <button id="generate-findings" class="flex-1 rounded-lg bg-green-600 px-6 py-3 text-sm font-medium text-white hover:bg-green-700">產生稽核發現</button>
+        <button id="prepare-findings" class="flex-1 rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700">進入稽核發現</button>
       </div>
     </section>
 
@@ -109,9 +137,30 @@
       <div class="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 class="text-lg font-semibold">稽核發現</h2>
-          <p id="findings-status" class="mt-1 text-sm text-gray-500">依受稽回覆產生。</p>
+          <p id="findings-status" class="mt-1 text-sm text-gray-500">可選格式後用 LLM 產生，失敗時保留規則草稿。</p>
         </div>
         <button id="new-audit" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">重新稽核</button>
+      </div>
+      <div class="mb-5 rounded-lg border border-gray-200 bg-white p-4">
+        <p class="mb-3 text-sm font-semibold text-gray-700">稽核發現格式</p>
+        <div class="grid gap-3 md:grid-cols-3">
+          <label class="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm">
+            <input type="radio" name="finding-format" value="iia5c" checked class="mr-2 accent-blue-600">
+            IIA 5C
+            <p class="mt-1 text-xs text-gray-500">現況、準則、原因、影響、建議。</p>
+          </label>
+          <label class="rounded-lg border border-gray-200 bg-white p-3 text-sm">
+            <input type="radio" name="finding-format" value="gov" class="mr-2 accent-blue-600">
+            政府稽核格式
+            <p class="mt-1 text-xs text-gray-500">法規不符合、待改善缺失、建議缺失。</p>
+          </label>
+          <label class="rounded-lg border border-gray-200 bg-white p-3 text-sm">
+            <input type="radio" name="finding-format" value="local" class="mr-2 accent-blue-600">
+            規則草稿
+            <p class="mt-1 text-xs text-gray-500">不呼叫 LLM，快速產出初稿。</p>
+          </label>
+        </div>
+        <button id="generate-findings" class="mt-4 w-full rounded-lg bg-green-600 px-6 py-3 text-sm font-medium text-white hover:bg-green-700">產生稽核發現</button>
       </div>
       <div id="findings-list" class="space-y-4"></div>
     </section>
@@ -125,7 +174,6 @@
   </div>
 
   <div id="error-toast" class="hidden fixed bottom-6 right-6 z-50 max-w-sm rounded-lg bg-red-600 px-5 py-3 text-sm text-white shadow-lg"></div>
-
-  <script type="module" src="js/app.js?v=20260508a"></script>
+  <script type="module" src="js/app.js?v=20260508b"></script>
 </body>
 </html>
