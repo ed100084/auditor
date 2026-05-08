@@ -133,7 +133,7 @@ def generate_focused_questions(session: dict, focus: dict) -> list:
     if not selected_items:
         return []
 
-    count = max(6, min(18, int(focus.get("question_count") or 12)))
+    count = max(6, min(18, int(focus.get("question_count") or 6)))
     template_name = focus.get("template_name") or "稽核面向"
     depth = focus.get("question_depth") or "standard"
     frameworks = ", ".join(get_framework_names(session.get("frameworks", []))) or "資通安全管理法"

@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.17';
+const VERSION = '2026.05.08.18';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -1289,7 +1289,7 @@ function selectedDimensions() {
 }
 
 function getQuestionCount() {
-  const value = Number(document.getElementById('question-count')?.value || 12);
+  const value = Number(document.getElementById('question-count')?.value || 6);
   return Math.min(18, Math.max(6, value));
 }
 

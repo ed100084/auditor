@@ -70,7 +70,7 @@ def _fallback_focused_questions(session: dict, focus: dict) -> list:
     selected_items = focus.get("selected_items") or []
     if not selected_items:
         return []
-    count = max(6, min(18, int(focus.get("question_count") or 12)))
+    count = max(6, min(18, int(focus.get("question_count") or 6)))
     template_name = focus.get("template_name") or "稽核面向"
     framework_names = get_framework_names(session.get("frameworks") or [])
     framework = framework_names[0] if framework_names else "資通安全管理法"

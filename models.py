@@ -49,7 +49,7 @@ class QuestionGenerateInput(BaseModel):
     template_id: str = ""
     template_name: str = ""
     selected_items: List[QuestionFocusItem] = Field(default_factory=list)
-    question_count: int = 12
+    question_count: int = 6
     question_depth: str = "standard"
 
 
