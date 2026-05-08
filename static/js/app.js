@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.5';
+const VERSION = '2026.05.08.6';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -430,9 +430,9 @@ function renderQuestions(useGuard = true) {
   }
 
   document.getElementById('question-list').innerHTML = state.questions.map((question, index) => `
-    <article class="rounded-lg border border-gray-200 border-l-4 border-l-indigo-400 bg-white p-4">
-      <div class="flex items-start gap-3">
-        <span class="mt-2 w-7 shrink-0 text-right text-sm font-semibold text-gray-400">${index + 1}</span>
+    <article class="audit-question-card rounded-lg border border-gray-200 border-l-4 border-l-indigo-400 bg-white p-4">
+      <div class="question-row flex items-start gap-3">
+        <span class="question-number mt-2 w-7 shrink-0 text-right text-sm font-semibold text-gray-400">${index + 1}</span>
         <div class="min-w-0 flex-1">
           <textarea data-question-index="${index}" rows="4" class="question-text auto-grow-textarea w-full rounded-md border border-gray-200 px-3 py-2 text-sm leading-relaxed text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">${esc(question.text)}</textarea>
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
@@ -442,7 +442,7 @@ function renderQuestions(useGuard = true) {
             <span class="rounded bg-indigo-100 px-2 py-1 font-medium text-indigo-800">${esc(question.dimension_label || '系統性探詢')}</span>
           </div>
         </div>
-        <button data-remove-question="${index}" class="rounded p-2 text-gray-300 hover:bg-red-50 hover:text-red-500" title="刪除問題">✕</button>
+        <button data-remove-question="${index}" class="remove-question rounded p-2 text-gray-300 hover:bg-red-50 hover:text-red-500" title="刪除問題">✕</button>
       </div>
     </article>
   `).join('');
@@ -483,9 +483,9 @@ async function saveQuestionsAndContinue() {
 function renderResponses() {
   document.getElementById('resp-progress').textContent = `已回覆 ${answeredCount()} / ${state.questions.length}`;
   document.getElementById('response-list').innerHTML = state.questions.map((question, index) => `
-    <article class="rounded-lg border border-gray-200 border-l-4 border-l-indigo-400 bg-white p-4">
-      <div class="mb-3 flex items-start gap-3">
-        <span class="w-8 shrink-0 text-sm font-semibold text-blue-600">Q${index + 1}</span>
+    <article class="audit-response-card rounded-lg border border-gray-200 border-l-4 border-l-indigo-400 bg-white p-4">
+      <div class="response-question mb-3 flex items-start gap-3">
+        <span class="response-number w-8 shrink-0 text-sm font-semibold text-blue-600">Q${index + 1}</span>
         <p class="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">${esc(question.text)}</p>
       </div>
       <div class="mb-2 flex flex-wrap gap-2">
