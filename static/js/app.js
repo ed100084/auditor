@@ -1,8 +1,9 @@
-const VERSION = '2026.05.08.12';
+const VERSION = '2026.05.08.13';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
 const AUTOSAVE_DELAY = 900;
+const DEFAULT_FINDING_FORMAT = 'gov';
 
 const CORE_FRAMEWORK_IDS = new Set([
   'csma_core',
@@ -226,7 +227,7 @@ const state = {
   questions: [],
   responses: {},
   findings: [],
-  findingFormat: 'local',
+  findingFormat: DEFAULT_FINDING_FORMAT,
   findingSummary: '',
   questionSource: '',
   activeTemplate: '',
@@ -256,6 +257,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderTemplates();
   renderDimensions();
   bindEvents();
+  setFindingFormatSelection(state.findingFormat);
   showApiVersion();
   await restoreCurrentSession();
   if (!state.sessionId) goToStep(1);
@@ -1186,19 +1188,22 @@ async function loadSession(sessionId) {
 function restoreFindings(saved) {
   if (!saved) {
     state.findings = [];
-    state.findingFormat = 'local';
+    state.findingFormat = DEFAULT_FINDING_FORMAT;
     state.findingSummary = '';
+    setFindingFormatSelection(state.findingFormat);
     return;
   }
   if (Array.isArray(saved)) {
     state.findings = saved;
-    state.findingFormat = 'local';
+    state.findingFormat = DEFAULT_FINDING_FORMAT;
     state.findingSummary = '';
+    setFindingFormatSelection(state.findingFormat);
     return;
   }
   state.findings = Array.isArray(saved.items) ? saved.items : [];
-  state.findingFormat = saved.format || 'local';
+  state.findingFormat = saved.format || DEFAULT_FINDING_FORMAT;
   state.findingSummary = saved.summary || '';
+  setFindingFormatSelection(state.findingFormat);
 }
 
 function responsesToMap(items) {
@@ -1330,7 +1335,15 @@ function getQuestionCount() {
 }
 
 function selectedFindingFormat() {
-  return document.querySelector('input[name="finding-format"]:checked')?.value || 'iia5c';
+  return document.querySelector('input[name="finding-format"]:checked')?.value || DEFAULT_FINDING_FORMAT;
+}
+
+function setFindingFormatSelection(format = DEFAULT_FINDING_FORMAT) {
+  const selected = format || DEFAULT_FINDING_FORMAT;
+  document.querySelectorAll('input[name="finding-format"]').forEach(input => {
+    input.checked = input.value === selected;
+  });
+  syncFindingFormatCards();
 }
 
 function syncFindingFormatCards() {
@@ -1364,7 +1377,7 @@ function resetAudit() {
   state.questions = [];
   state.responses = {};
   state.findings = [];
-  state.findingFormat = 'local';
+  state.findingFormat = DEFAULT_FINDING_FORMAT;
   state.findingSummary = '';
   state.activeTemplate = '';
   state.questionSource = '';
@@ -1379,6 +1392,7 @@ function resetAudit() {
   updateSessionLink();
   renderTemplates();
   renderFrameworks();
+  setFindingFormatSelection(state.findingFormat);
   closeHistory();
   goToStep(1);
 }
