@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.18';
+const VERSION = '2026.05.08.19';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -176,6 +176,8 @@ function bindEvents() {
     goToStep(5);
   });
   document.getElementById('generate-findings').addEventListener('click', generateFindings);
+  document.getElementById('download-findings-docx').addEventListener('click', () => downloadFindingsReport('docx'));
+  document.getElementById('download-findings-pdf').addEventListener('click', () => downloadFindingsReport('pdf'));
   document.getElementById('new-audit').addEventListener('click', resetAudit);
   document.getElementById('open-history').addEventListener('click', openHistory);
   document.getElementById('close-history').addEventListener('click', closeHistory);
@@ -732,6 +734,38 @@ async function saveFindingsOnly() {
     markSynced();
   } catch (error) {
     setStatus(`稽核發現未寫入後端：${error.message}`);
+  }
+}
+
+async function downloadFindingsReport(format) {
+  if (!['docx', 'pdf'].includes(format)) return;
+  const apiKey = getApiKey(true);
+  if (!apiKey) return showToast('未設定 API key，無法匯出文件。');
+  if (!state.findings.length) {
+    state.findings = buildLocalFindings();
+    renderFindings();
+  }
+  showLoading(`準備 ${format.toUpperCase()} 下載...`);
+  try {
+    await ensureSession();
+    await saveFindingsOnly();
+    const response = await fetch(`${API_BASE}/api/sessions/${state.sessionId}/findings/export?format=${format}`, {
+      headers: { 'X-API-Key': apiKey },
+    });
+    if (!response.ok) throw new Error(await response.text() || `HTTP ${response.status}`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `audit-findings-${state.sessionId || 'draft'}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    showToast(`下載失敗：${error.message}`);
+  } finally {
+    hideLoading();
   }
 }
 

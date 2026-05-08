@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from export_service import build_findings_docx, build_findings_pdf
 from session_store import get_session, update_session
 from llm_service import stream_findings, stream_gov_findings
 
@@ -55,3 +56,34 @@ def save_findings(session_id: str, body: FindingsInput):
         raise HTTPException(status_code=404, detail="Session not found")
     update_session(session_id, {"findings": body.findings})
     return {"ok": True}
+
+
+@router.get("/{session_id}/findings/export")
+def export_findings(session_id: str, format: str = Query(default="docx")):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    normalized = format.lower()
+    try:
+        if normalized == "docx":
+            stream = build_findings_docx(session)
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            extension = "docx"
+        elif normalized == "pdf":
+            stream = build_findings_pdf(session)
+            media_type = "application/pdf"
+            extension = "pdf"
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported export format")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    filename = f"audit-findings-{session_id}.{extension}"
+    return StreamingResponse(
+        stream,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

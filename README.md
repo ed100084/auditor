@@ -16,7 +16,7 @@ https://ed100084.github.io/auditor/
 Current application version:
 
 ```text
-v2026.05.08.18
+v2026.05.08.19
 ```
 
 ## Main Features
@@ -31,6 +31,7 @@ v2026.05.08.18
 - "My audit records" panel for loading and deleting saved audit sessions
 - Visible frontend and API version indicators to reduce cache confusion
 - Finding generation with LLM support and local fallback drafts
+- Finding report export to DOCX or PDF from saved session findings
 - Two report formats:
   - IIA 5C style findings
   - Government / MOHW-style findings and recommendations
