@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.14';
+const VERSION = '2026.05.08.15';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -277,7 +277,7 @@ function renderStepNav() {
 
 function goToStep(step) {
   if (step === 3 && state.questions.length === 0) {
-    state.questions = buildLocalQuestions(getScope(), getContext());
+    state.questions = adaptQuestionsToSettings([]);
     state.questionSource = 'navigation-guard';
     renderQuestions();
   }
@@ -418,6 +418,24 @@ function updateTemplateSelection(templateId) {
   renderTemplates();
 }
 
+function selectedTemplateItems(template = currentTemplate()) {
+  if (!template?.items) return [];
+  const selected = selectedTemplateItemIds(template);
+  return template.items.filter(([itemId]) => selected.includes(itemId));
+}
+
+function questionFocusPayload() {
+  const template = currentTemplate();
+  const selected = selectedTemplateItems(template);
+  return {
+    template_id: template?.id || '',
+    template_name: template?.name || '',
+    selected_items: selected.map(([id, text]) => ({ id, text })),
+    question_count: getQuestionCount(),
+    question_depth: document.getElementById('question-depth')?.value || 'standard',
+  };
+}
+
 function applyTemplate(id) {
   const template = TEMPLATES.find(item => item.id === id);
   if (!template) return;
@@ -480,9 +498,9 @@ async function generateQuestions() {
       responsibility_level: state.responsibilityLevel || null,
     });
     await api('POST', `/sessions/${state.sessionId}/scope`, { scope, context });
-    const result = await api('POST', `/sessions/${state.sessionId}/questions/generate`);
+    const result = await api('POST', `/sessions/${state.sessionId}/questions/generate`, questionFocusPayload());
     questions = normalizeQuestions(result.questions || []);
-    state.questionSource = questions.length ? 'backend-rules' : '';
+    state.questionSource = questions.length ? (result.source || 'backend-rules') : '';
   } catch (error) {
     state.questionSource = `frontend-fallback: ${error.message}`;
   }
@@ -491,8 +509,8 @@ async function generateQuestions() {
     questions = adaptQuestionsToSettings([]);
     if (!state.questionSource) state.questionSource = 'frontend-empty-response';
   } else {
-    questions = adaptQuestionsToSettings(questions);
-    if (currentTemplate(scope, context)) state.questionSource = 'template-backend-rules';
+    questions = adaptQuestionsToSettings(questions, { preferProvided: true });
+    if (currentTemplate(scope, context) && state.questionSource === 'rules') state.questionSource = 'template-backend-rules';
   }
 
   state.questions = questions;
@@ -503,10 +521,12 @@ async function generateQuestions() {
   goToStep(3);
 }
 
-function adaptQuestionsToSettings(questions) {
+function adaptQuestionsToSettings(questions, options = {}) {
   const count = getQuestionCount();
   const local = buildLocalQuestions(getScope(), getContext());
-  const merged = [...local, ...questions].slice(0, count);
+  const merged = options.preferProvided
+    ? [...questions, ...local].slice(0, count)
+    : [...local, ...questions].slice(0, count);
   return merged.map((question, index) => enrichQuestion(question, selectedDimensions()[index % selectedDimensions().length]));
 }
 
@@ -523,6 +543,10 @@ function renderQuestions(useGuard = true) {
   document.getElementById('question-source').textContent =
     state.questionSource === 'loaded-session'
       ? '來源：已載入先前同步紀錄。'
+      : state.questionSource === 'llm-focus'
+      ? '來源：LLM 已依勾選範圍挑選高風險稽核重點。'
+      : state.questionSource === 'rules-focus'
+      ? '來源：後端規則已依勾選範圍逐項聚焦。'
       : state.questionSource === 'template-backend-rules'
       ? '來源：已優先依常用範本產生，並補入後端規則題庫。'
       : state.questionSource === 'template-settings'
@@ -866,39 +890,30 @@ function buildTemplateQuestions(template, scope, context) {
     .map(id => FRAMEWORKS.find(item => item.id === id)?.name || id)
     .filter(Boolean);
   const source = frameworkNames[0] || selectedFrameworkNames()[0] || '稽核框架';
-  const scopeText = scope || template.scope;
   const contextText = context || template.context;
   const target = `${template.name}（${template.category}）`;
-  const frameworkText = frameworkNames.length ? frameworkNames.join('、') : source;
-  const base = [
-    ['現場流程', template.category, `以「${target}」來看，現場每天或每週實際怎麼執行？請從最近一次真實作業開始講，不要只描述制度。`],
-    ['責任分工', '角色與交接', `誰是「${target}」的主要負責人、覆核人與備援人員？如果發生例外，誰有權決定怎麼處理？`],
-    ['管理母體', '清冊與範圍', `這次範圍提到「${scopeText}」。你們實際用哪份清冊、系統或報表確認所有對象都有納入管理？`],
-    ['抽樣路徑', '稽核佐證', `如果我現在抽一筆樣本，從哪裡可以一路看到申請、核准、執行、覆核與結案？哪些證據最可靠？`],
-    ['例外情境', '例外處理', `最近一年「${target}」有沒有例外、逾期、未照流程或緊急處理？請挑一個案例說明怎麼核准與補救。`],
-    ['失敗偵測', '監控與告警', `如果「${target}」沒有被正確執行，誰會知道？靠系統告警、人工檢查、使用者回報，還是事後才發現？`],
-    ['改善追蹤', '缺失改善', `過去針對「${target}」被指出的問題，現在改善到哪裡？誰驗證有效，多久後再回頭確認？`],
-    ['權限邊界', '存取控制', `哪些人可以修改「${target}」相關設定、紀錄或結果？高權限操作是否能追到人、時間與原因？`],
-    ['資料流向', '資料保護', `這個範本情境會碰到哪些資料？資料如何取得、保存、傳送、匯出與刪除？哪個環節最容易失控？`],
-    ['委外介面', '第三方作業', `如果有廠商、雲端或跨單位參與，他們實際做哪一段？你們怎麼驗收交付結果與追蹤問題？`],
-    ['中斷應變', '營運持續', `如果「${target}」相關系統、廠商或關鍵人員暫時不可用，現場怎麼繼續作業？最近有沒有測過？`],
-    ['管理回報', '主管監督', `主管平常用什麼資訊判斷「${target}」有沒有穩定運作？哪些異常會被升級或列入會議追蹤？`],
-    ['工具限制', '系統設定', `目前有哪些控制靠系統自動完成？哪些還是人工處理？人工處理最常出錯的地方是什麼？`],
-    ['人員落實', '教育與宣導', `實際操作人員怎麼知道這件事該怎麼做？新人、輪調人員或外包人員有沒有被確認學會？`],
-    ['風險判斷', frameworkText, `先不談條文，站在現場角度，「${target}」最可能造成重大影響的三個失控情境是什麼？目前怎麼防？`],
-    ['邊界灰區', '範圍外風險', `有沒有任何系統、資料、廠商或流程處在灰色地帶，大家以為有人管，但實際責任不清？`],
-    ['近期案例', '案例追問', `請選一個最能代表「${target}」的近期案例，帶我看完整紀錄，包含誰提出、誰核准、誰執行、誰覆核。`],
-    ['稽核優先順序', '可驗證性', `如果只能優先抽核三個點，你認為哪三個最能看出「${target}」是真的有運作，而不是只有文件？`],
+  const selectedItems = selectedTemplateItems(template).slice(0, count);
+  const prompts = [
+    ['現場流程', '請用最近一次實際案例說明「{item}」如何執行，包含提出、核准、執行、覆核與結案。'],
+    ['責任分工', '針對「{item}」，誰是主要負責人、覆核人與備援人員？例外或爭議由誰核准？'],
+    ['母體清冊', '「{item}」目前以哪份清冊、系統或報表作為抽核母體？誰維護，多久更新一次？'],
+    ['抽核佐證', '如果現在抽核「{item}」，可從哪裡取得樣本、紀錄位置與判斷標準？'],
+    ['例外追蹤', '「{item}」最近一年是否有例外、逾期、未落實或緊急處理？請挑一案說明原因、核准與改善追蹤。'],
+    ['管理監督', '主管如何知道「{item}」有持續運作？是否有指標、報表、會議紀錄或改善追蹤紀錄？'],
+    ['系統控制', '「{item}」哪些控制靠系統自動執行，哪些仍靠人工判斷？人工處理是否留下理由與覆核紀錄？'],
+    ['風險判斷', '就「{item}」來看，最可能影響醫療服務、病歷個資或關鍵系統可用性的失控情境是什麼？目前怎麼防？'],
   ];
 
-  return base.slice(0, count).map(([category, reference, text], index) => {
+  return selectedItems.map(([itemId, itemText], index) => {
     const dimension = dimensions[index % dimensions.length];
+    const [category, prompt] = prompts[index % prompts.length];
+    const reference = itemText.split('、')[0].replace('。', '').slice(0, 24) || itemId;
     const focused = [
-      text,
+      prompt.replace('{item}', itemText),
       `情境背景：${contextText}`,
-      `本次範圍：${scopeText}`,
+      `本題範圍：${itemText}`,
     ].join('\n\n');
-    return makeQuestion(focused, category, target, reference, dimension.label);
+    return makeQuestion(focused, `${template.name}-${category}`, target || source, reference, dimension.label);
   });
 }
 

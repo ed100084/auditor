@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Question(BaseModel):
@@ -38,6 +38,19 @@ class FrameworkSelection(BaseModel):
 class ScopeInput(BaseModel):
     scope: str
     context: str
+
+
+class QuestionFocusItem(BaseModel):
+    id: str
+    text: str
+
+
+class QuestionGenerateInput(BaseModel):
+    template_id: str = ""
+    template_name: str = ""
+    selected_items: List[QuestionFocusItem] = Field(default_factory=list)
+    question_count: int = 12
+    question_depth: str = "standard"
 
 
 class QuestionUpdate(BaseModel):

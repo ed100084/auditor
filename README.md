@@ -16,7 +16,7 @@ https://ed100084.github.io/auditor/
 Current application version:
 
 ```text
-v2026.05.08.14
+v2026.05.08.15
 ```
 
 ## Main Features
@@ -24,7 +24,7 @@ v2026.05.08.14
 - Framework selection for Taiwan CSMA requirements, ISO 27001, ISO 27701, healthcare scenarios, and IT control domains
 - MOHW hospital-oriented audit-scope templates grouped by strategy, management, and technical tabs, with removable scope items for each dimension
 - Adjustable audit-question generation by question depth, question count, and audit dimension
-- Open-ended audit questions with rule-based fallback when the LLM or API response is unavailable
+- Open-ended audit questions with LLM focus selection from selected scope items and rule-based fallback when the LLM or API response is unavailable
 - Easier auditee response collection with autosave-oriented text areas
 - Persistent audit sessions stored in SQLite, designed for cross-device use between phone and desktop
 - Short session URLs such as `https://ed100084.github.io/auditor/?session=001`

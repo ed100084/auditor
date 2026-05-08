@@ -18,6 +18,7 @@ import logging
 import re
 import threading
 import time
+import uuid
 
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
@@ -124,6 +125,82 @@ def _build_qa_text(questions: list, responses: list) -> str:
             f"受稽單位回覆：{ans}"
         )
     return "\n\n---\n\n".join(parts)
+
+
+def generate_focused_questions(session: dict, focus: dict) -> list:
+    """Use the LLM to choose high-value audit questions from selected scope items."""
+    selected_items = focus.get("selected_items") or []
+    if not selected_items:
+        return []
+
+    count = max(6, min(18, int(focus.get("question_count") or 12)))
+    template_name = focus.get("template_name") or "稽核面向"
+    depth = focus.get("question_depth") or "standard"
+    frameworks = ", ".join(get_framework_names(session.get("frameworks", []))) or "資通安全管理法"
+    item_text = "\n".join(
+        f"{index + 1}. [{item.get('id', '')}] {item.get('text', '')}"
+        for index, item in enumerate(selected_items)
+    )
+
+    json_schema = (
+        '{"questions":[{"text":"string","category":"string",'
+        '"source_framework":"string","reference":"string",'
+        '"dimension_label":"治理制度|流程執行|技術控制|佐證文件|例外改善"}]}'
+    )
+    system_prompt = "\n".join([
+        "你是衛福部所屬醫院資安稽核委員，負責將稽核範圍聚焦成高價值訪談問題。",
+        "你的任務是從稽核人員勾選的範圍項目中挑重點，不是把所有項目平均塞進每一題。",
+        "",
+        "輸出規則：",
+        "- 僅輸出純 JSON object，不含 markdown 或說明文字",
+        f"- 格式：{json_schema}",
+        f"- questions 最多 {count} 題，至少 6 題",
+        "- 每題只能聚焦一個主要稽核重點",
+        "- 不要複製整段稽核範圍，不要產生總論式問題",
+        "- 問題必須能引導受稽單位提供流程、責任人、紀錄位置、樣本母體、例外案例或改善證據",
+        "- 依醫療營運風險、病歷個資、關鍵系統可用性、委外維運、通報應變、可抽核性排序",
+        "- wording 使用繁體中文，務實、可訪談、可抽核",
+        "- category 使用策略面、管理面或技術面，必要時加上子主題",
+        "- source_framework 優先使用本次框架名稱",
+        "- reference 填入被挑選的範圍項目短名，不要填整段長文",
+    ])
+    user_prompt = "\n\n".join([
+        f"稽核面向：{template_name}",
+        f"問題深度：{depth}",
+        f"適用框架：{frameworks}",
+        f"稽核範圍：\n{session.get('scope', '')}",
+        f"稽核情境：\n{session.get('context', '')}",
+        f"可挑選範圍項目：\n{item_text}",
+    ])
+
+    response = _call_with_retry(lambda: _get_client().complete(
+        messages=[
+            SystemMessage(content=system_prompt),
+            UserMessage(content=user_prompt),
+        ],
+        model=settings.AZURE_AI_MODEL,
+        max_tokens=3500,
+        temperature=0.25,
+    ))
+    raw = response.choices[0].message.content if response.choices else ""
+    data = json.loads(_repair_truncated_json(_strip_json_fences(raw)))
+    questions = data.get("questions") if isinstance(data, dict) else []
+    normalized = []
+    for item in questions[:count]:
+        text = str(item.get("text", "")).strip()
+        if not text:
+            continue
+        normalized.append({
+            "id": str(uuid.uuid4()),
+            "text": text,
+            "category": str(item.get("category") or template_name),
+            "source_framework": str(item.get("source_framework") or frameworks.split(",")[0]),
+            "reference": str(item.get("reference") or template_name),
+            "dimension": "focused",
+            "dimension_label": str(item.get("dimension_label") or "系統性探詢"),
+            "generated_by": "llm_focus",
+        })
+    return normalized
 
 
 async def _stream_sse(msgs: list, max_tokens: int, temperature: float):
