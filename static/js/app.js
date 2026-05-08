@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.4';
+const VERSION = '2026.05.08.5';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -257,6 +257,7 @@ function goToStep(step) {
   document.querySelectorAll('.step-panel').forEach(panel => panel.classList.remove('active'));
   document.getElementById(`step-${step}`).classList.add('active');
   updateStepNav();
+  refreshVisibleTextareas();
   window.scrollTo(0, 0);
 }
 
@@ -433,7 +434,7 @@ function renderQuestions(useGuard = true) {
       <div class="flex items-start gap-3">
         <span class="mt-2 w-7 shrink-0 text-right text-sm font-semibold text-gray-400">${index + 1}</span>
         <div class="min-w-0 flex-1">
-          <textarea data-question-index="${index}" rows="1" class="question-text auto-grow-textarea w-full rounded-md border border-gray-200 px-3 py-2 text-sm leading-relaxed text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">${esc(question.text)}</textarea>
+          <textarea data-question-index="${index}" rows="4" class="question-text auto-grow-textarea w-full rounded-md border border-gray-200 px-3 py-2 text-sm leading-relaxed text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">${esc(question.text)}</textarea>
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
             <span class="rounded bg-gray-100 px-2 py-1 text-gray-600">${esc(question.category)}</span>
             <span class="px-2 py-1 text-gray-400">${esc(question.source_framework)}</span>
@@ -1140,8 +1141,14 @@ function cssEscape(value) {
 }
 
 function autoGrow(textarea) {
-  textarea.style.height = '0px';
+  textarea.style.height = 'auto';
   textarea.style.height = `${textarea.scrollHeight + 2}px`;
+}
+
+function refreshVisibleTextareas() {
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.step-panel.active textarea.auto-grow-textarea').forEach(autoGrow);
+  });
 }
 
 function showLoading(text) {

@@ -16,6 +16,12 @@
   overflow: hidden;
   resize: none;
 }
+.question-text {
+  min-height: 8rem;
+}
+.response-text {
+  min-height: 6rem;
+}
 
 /* 歷史紀錄側邊板 */
 #history-panel {
