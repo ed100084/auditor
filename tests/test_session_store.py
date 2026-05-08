@@ -13,11 +13,18 @@ def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setattr(session_store, "DB_PATH", tmp_path / "test.db")
 
 
-def test_create_session_returns_uuid():
+def test_create_session_returns_short_id():
     import session_store
     sid = session_store.create_session()
-    assert isinstance(sid, str)
-    assert len(sid) == 36  # UUID4 格式
+    assert sid == "001"
+
+
+def test_create_session_short_id_increments():
+    import session_store
+    sid1 = session_store.create_session()
+    sid2 = session_store.create_session()
+    assert sid1 == "001"
+    assert sid2 == "002"
 
 
 def test_get_nonexistent_session_returns_none():

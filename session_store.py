@@ -1,6 +1,6 @@
 import json
+import re
 import sqlite3
-import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +9,7 @@ from typing import Optional
 DB_PATH = Path(__file__).parent / "data" / "auditor.db"
 
 _JSON_FIELDS = ("questions", "responses", "findings", "frameworks")
+_SHORT_ID_RE = re.compile(r"^\d+$")
 
 
 @contextmanager
@@ -60,22 +61,37 @@ def _row_to_dict(row) -> dict:
     return d
 
 
+def _next_session_id(conn) -> str:
+    rows = conn.execute("SELECT session_id FROM sessions").fetchall()
+    max_id = 0
+    for row in rows:
+        session_id = row["session_id"]
+        if _SHORT_ID_RE.match(session_id):
+            max_id = max(max_id, int(session_id))
+    return f"{max_id + 1:03d}"
+
+
 def create_session(user_name: str = "") -> str:
-    session_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat()
     with _db() as conn:
-        conn.execute(
-            """
-            INSERT INTO sessions (
-                session_id, framework_id, responsibility_level,
-                questions, responses, findings,
-                frameworks, custom_framework_text, scope, context,
-                created_at, updated_at, user_name
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (session_id, None, None, "[]", "[]", None, "[]", "", "", "", now, now, user_name),
-        )
-    return session_id
+        for _ in range(1000):
+            session_id = _next_session_id(conn)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO sessions (
+                        session_id, framework_id, responsibility_level,
+                        questions, responses, findings,
+                        frameworks, custom_framework_text, scope, context,
+                        created_at, updated_at, user_name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (session_id, None, None, "[]", "[]", None, "[]", "", "", "", now, now, user_name),
+                )
+                return session_id
+            except sqlite3.IntegrityError:
+                continue
+    raise RuntimeError("Unable to create a new session id")
 
 
 def get_session(session_id: str) -> Optional[dict]:

@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.7';
+const VERSION = '2026.05.08.8';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -339,10 +339,15 @@ async function loadHistory() {
         ? new Date(session.updated_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
         : '';
       return `
-        <button type="button" data-load-session="${esc(session.session_id)}" class="w-full rounded-lg border ${active ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'} p-3 text-left hover:border-blue-300 hover:bg-blue-50">
-          <p class="text-sm font-medium text-gray-800">${esc(title.length > 54 ? `${title.slice(0, 54)}...` : title)}</p>
-          <p class="mt-1 text-xs text-gray-400">${esc(updated)} ${session.user_name ? `· ${esc(session.user_name)}` : ''}</p>
-        </button>
+        <div class="rounded-lg border ${active ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'} p-3 hover:border-blue-300 hover:bg-blue-50">
+          <div class="flex items-start gap-3">
+            <button type="button" data-load-session="${esc(session.session_id)}" class="min-w-0 flex-1 text-left">
+              <p class="text-sm font-medium text-gray-800">${esc(title.length > 54 ? `${title.slice(0, 54)}...` : title)}</p>
+              <p class="mt-1 text-xs text-gray-400">#${esc(session.session_id)} ${esc(updated)} ${session.user_name ? `· ${esc(session.user_name)}` : ''}</p>
+            </button>
+            <button type="button" data-delete-session="${esc(session.session_id)}" class="shrink-0 rounded-md border border-red-100 px-2 py-1 text-xs text-red-600 hover:bg-red-50">刪除</button>
+          </div>
+        </div>
       `;
     }).join('');
     document.querySelectorAll('[data-load-session]').forEach(button => {
@@ -351,8 +356,27 @@ async function loadHistory() {
         closeHistory();
       });
     });
+    document.querySelectorAll('[data-delete-session]').forEach(button => {
+      button.addEventListener('click', async () => deleteHistorySession(button.dataset.deleteSession));
+    });
   } catch (error) {
     list.innerHTML = `<p class="text-sm text-red-600">讀取紀錄失敗：${esc(error.message)}</p>`;
+  }
+}
+
+async function deleteHistorySession(sessionId) {
+  if (!sessionId || !confirm(`確定刪除稽核紀錄 #${sessionId}？刪除後無法復原。`)) return;
+  try {
+    await api('DELETE', `/sessions/${sessionId}`);
+    if (sessionId === state.sessionId) {
+      resetAudit();
+      showToast('已刪除目前稽核紀錄。');
+      return;
+    }
+    await loadHistory();
+    showToast('已刪除稽核紀錄。');
+  } catch (error) {
+    showToast(`刪除紀錄失敗：${error.message}`);
   }
 }
 
@@ -1131,16 +1155,22 @@ async function persistNow(reason = 'auto') {
 function rememberSession(sessionId) {
   if (!sessionId) return;
   localStorage.setItem('auditor_session_id', sessionId);
-  const url = new URL(window.location.href);
-  url.searchParams.set('session', sessionId);
-  window.history.replaceState({}, '', url);
+  window.history.replaceState({}, '', sessionUrl(sessionId));
   updateSessionLink();
 }
 
 function updateSessionLink() {
   const input = document.getElementById('session-link');
   if (!input) return;
-  input.value = state.sessionId ? window.location.href : '尚未建立';
+  input.value = state.sessionId ? sessionUrl(state.sessionId) : '尚未建立';
+}
+
+function sessionUrl(sessionId) {
+  let pathname = window.location.pathname;
+  if (pathname.endsWith('/index.html')) pathname = pathname.slice(0, -'index.html'.length);
+  const url = new URL(`${window.location.origin}${pathname}`);
+  url.searchParams.set('session', sessionId);
+  return url.toString();
 }
 
 function markSynced(timestamp) {
