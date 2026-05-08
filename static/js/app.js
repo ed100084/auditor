@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.2';
+const VERSION = '2026.05.08.3';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -97,6 +97,8 @@ const state = {
   questions: [],
   responses: {},
   findings: [],
+  findingFormat: 'local',
+  findingSummary: '',
   questionSource: '',
   activeTemplate: '',
 };
@@ -146,6 +148,8 @@ function bindEvents() {
   document.getElementById('prepare-findings').addEventListener('click', () => {
     renderResponses();
     state.findings = buildLocalFindings();
+    state.findingFormat = 'local';
+    state.findingSummary = '';
     renderFindings();
     goToStep(5);
   });
@@ -442,6 +446,8 @@ async function generateFindings() {
 
   if (format === 'local') {
     state.findings = buildLocalFindings();
+    state.findingFormat = 'local';
+    state.findingSummary = '';
     hideLoading();
     renderFindings();
     return;
@@ -452,11 +458,15 @@ async function generateFindings() {
     const report = await streamFindingReport(format);
     const findings = normalizeFindings(report, format);
     state.findings = findings.length ? findings : buildLocalFindings();
+    state.findingFormat = findings.length ? format : 'local';
+    state.findingSummary = findings.length ? (report.executive_summary || '') : '';
     document.getElementById('findings-status').textContent = findings.length
-      ? `LLM 已產生 ${format === 'gov' ? '政府稽核格式' : 'IIA 5C 格式'}草稿。`
+      ? `LLM 已產生 ${format === 'gov' ? '衛福部/數位部 CI 格式' : 'IIA 5C 格式'}草稿。`
       : 'LLM 回傳內容沒有可用發現，已改用規則草稿。';
   } catch (error) {
     state.findings = buildLocalFindings();
+    state.findingFormat = 'local';
+    state.findingSummary = '';
     document.getElementById('findings-status').textContent = `LLM 產生失敗，已改用規則草稿：${error.message}`;
   } finally {
     hideLoading();
@@ -525,7 +535,14 @@ function streamFindingReport(format) {
 
 function renderFindings() {
   if (!state.findings.length) state.findings = buildLocalFindings();
-  document.getElementById('findings-list').innerHTML = state.findings.map((finding, index) => `
+  if (state.findingFormat === 'gov' && state.findings.some(finding => finding.finding_type)) {
+    renderGovFindings();
+    return;
+  }
+  const summary = state.findingSummary
+    ? `<section class="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900">${esc(state.findingSummary)}</section>`
+    : '';
+  document.getElementById('findings-list').innerHTML = summary + state.findings.map((finding, index) => `
     <article class="rounded-lg border border-gray-200 border-l-4 ${finding.level === 'High' ? 'border-l-red-500' : finding.level === 'Low' ? 'border-l-blue-500' : 'border-l-amber-500'} bg-white p-5">
       <div class="mb-3 flex flex-wrap items-center gap-2">
         <span class="text-sm font-semibold text-gray-400">F${index + 1}</span>
@@ -541,6 +558,54 @@ function renderFindings() {
       </div>
     </article>
   `).join('');
+}
+
+function renderGovFindings() {
+  const typeStyle = type => {
+    if (type === '法規不符合') return { badge: 'bg-red-100 text-red-700 border-red-300', bar: 'border-l-red-500' };
+    if (type === '待改善缺失') return { badge: 'bg-amber-100 text-amber-700 border-amber-300', bar: 'border-l-amber-500' };
+    return { badge: 'bg-blue-100 text-blue-700 border-blue-300', bar: 'border-l-blue-500' };
+  };
+  const counts = {
+    nonCompliance: state.findings.filter(finding => finding.finding_type === '法規不符合').length,
+    improvement: state.findings.filter(finding => finding.finding_type === '待改善缺失').length,
+    suggestion: state.findings.filter(finding => finding.finding_type === '建議缺失').length,
+  };
+  const summary = state.findingSummary
+    ? `<section class="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm leading-relaxed text-blue-900">${esc(state.findingSummary)}</section>`
+    : '';
+  const badges = `
+    <div class="flex flex-wrap gap-2">
+      ${counts.nonCompliance ? `<span class="rounded-full border border-red-300 bg-red-100 px-3 py-1 text-sm font-medium text-red-700">法規不符合 ${counts.nonCompliance} 項</span>` : ''}
+      ${counts.improvement ? `<span class="rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700">待改善缺失 ${counts.improvement} 項</span>` : ''}
+      ${counts.suggestion ? `<span class="rounded-full border border-blue-300 bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">建議缺失 ${counts.suggestion} 項</span>` : ''}
+    </div>
+  `;
+  document.getElementById('findings-list').innerHTML = summary + badges + state.findings.map((finding, index) => {
+    const style = typeStyle(finding.finding_type || '建議缺失');
+    const evidence = Array.isArray(finding.evidence) ? finding.evidence : [];
+    return `
+      <article class="rounded-lg border border-gray-200 border-l-4 ${style.bar} bg-white p-5">
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+          <span class="text-sm font-semibold text-gray-400">F${index + 1}</span>
+          <span class="rounded-full border px-2.5 py-1 text-xs font-semibold ${style.badge}">${esc(finding.finding_type || '')}</span>
+          <h3 class="text-sm font-semibold text-gray-900">${esc(finding.title || '')}</h3>
+        </div>
+        <div class="space-y-4 text-sm leading-relaxed text-gray-700">
+          <div class="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+            ${finding.legal_basis ? `<p><strong class="text-indigo-900">法源依據：</strong>${esc(finding.legal_basis)}</p>` : ''}
+            ${finding.legal_text ? `<div class="mt-2"><p class="mb-1 text-xs font-semibold text-indigo-600">應辦事項（法條原文）</p><blockquote class="border-l-4 border-indigo-300 pl-3 whitespace-pre-wrap text-indigo-900">${esc(finding.legal_text)}</blockquote></div>` : ''}
+          </div>
+          <div>
+            <p class="mb-1 text-xs font-semibold text-gray-500">稽核發現說明</p>
+            <p class="whitespace-pre-wrap">${esc(finding.finding_description || '')}</p>
+          </div>
+          ${evidence.length ? `<div><p class="mb-1 text-xs font-semibold text-gray-500">佐證資料</p><ul class="list-inside list-disc space-y-1">${evidence.map(item => `<li>${esc(item)}</li>`).join('')}</ul></div>` : ''}
+          <p class="rounded-lg bg-green-50 p-3 text-green-800"><strong>改善建議：</strong>${esc(finding.recommendation || '')}</p>
+        </div>
+      </article>
+    `;
+  }).join('');
 }
 
 function buildLocalQuestions(scope, context) {
@@ -676,12 +741,12 @@ function normalizeFindings(report, format) {
   const items = Array.isArray(report?.findings) ? report.findings : [];
   if (format === 'gov') {
     return items.map(item => ({
-      level: item.finding_type === '法規不符合' ? 'High' : 'Medium',
+      finding_type: item.finding_type || '建議缺失',
       title: item.title || item.finding_type || '稽核發現',
-      condition: item.finding_description || '',
-      criteria: [item.legal_basis, item.legal_text].filter(Boolean).join('\n'),
-      cause: '',
-      effect: Array.isArray(item.evidence) ? `相關佐證：${item.evidence.join('、')}` : '',
+      legal_basis: item.legal_basis || '',
+      legal_text: item.legal_text || '',
+      finding_description: item.finding_description || '',
+      evidence: Array.isArray(item.evidence) ? item.evidence : [],
       recommendation: item.recommendation || '',
     })).filter(item => item.title || item.condition);
   }
@@ -807,6 +872,8 @@ function resetAudit() {
   state.questions = [];
   state.responses = {};
   state.findings = [];
+  state.findingFormat = 'local';
+  state.findingSummary = '';
   state.activeTemplate = '';
   document.getElementById('scope-input').value = '';
   document.getElementById('context-input').value = '';
