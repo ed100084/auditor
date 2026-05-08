@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.16';
+const VERSION = '2026.05.08.17';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
