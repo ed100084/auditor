@@ -12,6 +12,10 @@
 .badge-Low { background: #dbeafe; color: #1e40af; }
 .spinner { border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 40px; height: 40px; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.auto-grow-textarea {
+  overflow: hidden;
+  resize: none;
+}
 
 /* 歷史紀錄側邊板 */
 #history-panel {
@@ -24,3 +28,6 @@
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 99;
 }
 #history-overlay.open { display: block; }
+@media (max-width: 640px) {
+  #history-panel { width: min(100vw, 400px); }
+}

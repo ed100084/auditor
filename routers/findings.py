@@ -1,9 +1,17 @@
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from session_store import get_session
+from pydantic import BaseModel
+
+from session_store import get_session, update_session
 from llm_service import stream_findings, stream_gov_findings
 
 router = APIRouter(prefix="/sessions", tags=["findings"])
+
+
+class FindingsInput(BaseModel):
+    findings: Any = None
 
 
 @router.get("/{session_id}/findings/stream")
@@ -38,3 +46,12 @@ def get_findings(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"findings": session.get("findings")}
+
+
+@router.put("/{session_id}/findings")
+def save_findings(session_id: str, body: FindingsInput):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    update_session(session_id, {"findings": body.findings})
+    return {"ok": True}

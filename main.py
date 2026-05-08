@@ -9,7 +9,7 @@ from config import settings
 from dependencies.auth import verify_api_key
 from routers import session, framework, questions, responses, findings, templates
 
-APP_VERSION = "2026.05.08.3"
+APP_VERSION = "2026.05.08.4"
 QUESTION_GENERATOR = "rules"
 
 app = FastAPI(title="資安稽核助手 API", version=APP_VERSION)

@@ -1,7 +1,8 @@
-const VERSION = '2026.05.08.3';
+const VERSION = '2026.05.08.4';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
+const AUTOSAVE_DELAY = 900;
 
 const CORE_FRAMEWORK_IDS = new Set([
   'csma_core',
@@ -101,7 +102,10 @@ const state = {
   findingSummary: '',
   questionSource: '',
   activeTemplate: '',
+  isLoadingSession: false,
 };
+
+let autosaveTimer = null;
 
 const steps = [
   ['選擇框架', 1],
@@ -111,11 +115,12 @@ const steps = [
   ['稽核發現', 5],
 ];
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('app-version').textContent = `v${VERSION}`;
   document.getElementById('user-name-input').value = localStorage.getItem('auditor_user_name') || '';
   document.getElementById('user-name-input').addEventListener('change', event => {
     localStorage.setItem('auditor_user_name', event.target.value.trim());
+    schedulePersist('user');
   });
 
   renderStepNav();
@@ -124,25 +129,31 @@ document.addEventListener('DOMContentLoaded', () => {
   renderDimensions();
   bindEvents();
   showApiVersion();
-  goToStep(1);
+  await restoreCurrentSession();
+  if (!state.sessionId) goToStep(1);
 });
 
 function bindEvents() {
   document.getElementById('step1-next').addEventListener('click', () => {
     state.responsibilityLevel = document.getElementById('resp-level').value;
     if (state.frameworks.length === 0) return showToast('請至少選擇一個稽核框架。');
+    schedulePersist('framework');
     goToStep(2);
   });
   document.getElementById('clear-template').addEventListener('click', clearTemplate);
+  document.getElementById('scope-input').addEventListener('input', () => schedulePersist('scope'));
+  document.getElementById('context-input').addEventListener('input', () => schedulePersist('scope'));
   document.getElementById('generate-questions').addEventListener('click', generateQuestions);
   document.getElementById('regenerate-questions').addEventListener('click', () => {
     state.questions = buildLocalQuestions(getScope(), getContext());
     state.questionSource = 'frontend-settings';
-    renderQuestions();
+    renderQuestions(false);
+    schedulePersist('questions');
   });
   document.getElementById('add-question').addEventListener('click', () => {
     state.questions.push(makeQuestion('', '自訂問題', '手動新增', '', '自訂'));
-    renderQuestions();
+    renderQuestions(false);
+    schedulePersist('questions');
   });
   document.getElementById('save-questions').addEventListener('click', saveQuestionsAndContinue);
   document.getElementById('prepare-findings').addEventListener('click', () => {
@@ -151,10 +162,18 @@ function bindEvents() {
     state.findingFormat = 'local';
     state.findingSummary = '';
     renderFindings();
+    saveFindingsOnly();
     goToStep(5);
   });
   document.getElementById('generate-findings').addEventListener('click', generateFindings);
   document.getElementById('new-audit').addEventListener('click', resetAudit);
+  document.getElementById('open-history').addEventListener('click', openHistory);
+  document.getElementById('close-history').addEventListener('click', closeHistory);
+  document.getElementById('history-overlay').addEventListener('click', closeHistory);
+  document.getElementById('new-session').addEventListener('click', resetAudit);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') persistNow('hidden');
+  });
 
   document.querySelectorAll('[data-go-step]').forEach(button => {
     button.addEventListener('click', () => goToStep(Number(button.dataset.goStep)));
@@ -162,6 +181,51 @@ function bindEvents() {
   document.querySelectorAll('input[name="finding-format"]').forEach(radio => {
     radio.addEventListener('change', syncFindingFormatCards);
   });
+}
+
+async function openHistory() {
+  document.getElementById('history-overlay').classList.add('open');
+  document.getElementById('history-panel').classList.add('open');
+  await loadHistory();
+}
+
+function closeHistory() {
+  document.getElementById('history-overlay').classList.remove('open');
+  document.getElementById('history-panel').classList.remove('open');
+}
+
+async function loadHistory() {
+  const list = document.getElementById('history-list');
+  list.innerHTML = '<p class="text-sm text-gray-500">讀取中...</p>';
+  try {
+    const user = document.getElementById('user-name-input').value.trim();
+    const sessions = await api('GET', `/sessions${user ? `?user=${encodeURIComponent(user)}` : ''}`);
+    if (!sessions.length) {
+      list.innerHTML = '<p class="text-sm text-gray-500">尚無紀錄。</p>';
+      return;
+    }
+    list.innerHTML = sessions.map(session => {
+      const active = session.session_id === state.sessionId;
+      const title = session.scope || '未命名稽核紀錄';
+      const updated = session.updated_at
+        ? new Date(session.updated_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : '';
+      return `
+        <button type="button" data-load-session="${esc(session.session_id)}" class="w-full rounded-lg border ${active ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'} p-3 text-left hover:border-blue-300 hover:bg-blue-50">
+          <p class="text-sm font-medium text-gray-800">${esc(title.length > 54 ? `${title.slice(0, 54)}...` : title)}</p>
+          <p class="mt-1 text-xs text-gray-400">${esc(updated)} ${session.user_name ? `· ${esc(session.user_name)}` : ''}</p>
+        </button>
+      `;
+    }).join('');
+    document.querySelectorAll('[data-load-session]').forEach(button => {
+      button.addEventListener('click', async () => {
+        await loadSession(button.dataset.loadSession);
+        closeHistory();
+      });
+    });
+  } catch (error) {
+    list.innerHTML = `<p class="text-sm text-red-600">讀取紀錄失敗：${esc(error.message)}</p>`;
+  }
 }
 
 function renderStepNav() {
@@ -230,6 +294,7 @@ function renderFrameworks() {
     input.addEventListener('change', () => {
       state.frameworks = [...document.querySelectorAll('.framework-checkbox:checked')].map(item => item.value);
       renderFrameworks();
+      schedulePersist('framework');
     });
   });
 }
@@ -279,6 +344,7 @@ function applyTemplate(id) {
   document.getElementById('context-input').value = template.context;
   renderFrameworks();
   renderTemplates();
+  schedulePersist('template');
 }
 
 function clearTemplate() {
@@ -286,6 +352,7 @@ function clearTemplate() {
   document.getElementById('scope-input').value = '';
   document.getElementById('context-input').value = '';
   renderTemplates();
+  schedulePersist('template');
 }
 
 function renderDimensions() {
@@ -331,6 +398,7 @@ async function generateQuestions() {
   state.questions = questions;
   state.responses = {};
   renderQuestions();
+  await persistNow('questions');
   hideLoading();
   goToStep(3);
 }
@@ -342,23 +410,30 @@ function adaptQuestionsToSettings(questions) {
   return merged.map((question, index) => enrichQuestion(question, selectedDimensions()[index % selectedDimensions().length]));
 }
 
-function renderQuestions() {
-  if (state.questions.length === 0) {
+function renderQuestions(useGuard = true) {
+  if (useGuard && state.questions.length === 0) {
     state.questions = buildLocalQuestions(getScope(), getContext());
     state.questionSource = 'render-guard';
   }
   document.getElementById('q-count-badge').textContent = `${state.questions.length} 題`;
   document.getElementById('question-source').textContent =
-    state.questionSource === 'backend-rules'
+    state.questionSource === 'loaded-session'
+      ? '來源：已載入先前同步紀錄。'
+      : state.questionSource === 'backend-rules'
       ? '來源：後端規則題庫，已依深度與面向補強。'
       : '來源：前端規則題庫保底，已依深度與面向產生。';
+
+  if (state.questions.length === 0) {
+    document.getElementById('question-list').innerHTML = '<div class="rounded-lg border border-dashed border-gray-300 bg-white p-5 text-center text-sm text-gray-500">尚未產生稽核問題。</div>';
+    return;
+  }
 
   document.getElementById('question-list').innerHTML = state.questions.map((question, index) => `
     <article class="rounded-lg border border-gray-200 border-l-4 border-l-indigo-400 bg-white p-4">
       <div class="flex items-start gap-3">
         <span class="mt-2 w-7 shrink-0 text-right text-sm font-semibold text-gray-400">${index + 1}</span>
         <div class="min-w-0 flex-1">
-          <textarea data-question-index="${index}" rows="5" class="question-text w-full resize-y rounded-md border border-gray-200 px-3 py-2 text-sm leading-relaxed text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">${esc(question.text)}</textarea>
+          <textarea data-question-index="${index}" rows="1" class="question-text auto-grow-textarea w-full rounded-md border border-gray-200 px-3 py-2 text-sm leading-relaxed text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">${esc(question.text)}</textarea>
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
             <span class="rounded bg-gray-100 px-2 py-1 text-gray-600">${esc(question.category)}</span>
             <span class="px-2 py-1 text-gray-400">${esc(question.source_framework)}</span>
@@ -372,14 +447,18 @@ function renderQuestions() {
   `).join('');
 
   document.querySelectorAll('.question-text').forEach(textarea => {
+    autoGrow(textarea);
     textarea.addEventListener('input', () => {
       state.questions[Number(textarea.dataset.questionIndex)].text = textarea.value;
+      autoGrow(textarea);
+      schedulePersist('questions');
     });
   });
   document.querySelectorAll('[data-remove-question]').forEach(button => {
     button.addEventListener('click', () => {
       state.questions.splice(Number(button.dataset.removeQuestion), 1);
       renderQuestions();
+      schedulePersist('questions');
     });
   });
 }
@@ -392,9 +471,7 @@ async function saveQuestionsAndContinue() {
   if (state.questions.length === 0) return showToast('請至少保留一個有效問題。');
 
   try {
-    if (state.sessionId) {
-      await api('PUT', `/sessions/${state.sessionId}/questions`, { questions: state.questions });
-    }
+    await persistNow('questions');
   } catch (error) {
     setStatus(`問題已留在畫面上，但後端暫時無法儲存：${error.message}`);
   }
@@ -413,14 +490,17 @@ function renderResponses() {
       <div class="mb-2 flex flex-wrap gap-2">
         ${responseSnippets().map(snippet => `<button type="button" data-response-snippet="${esc(snippet)}" data-response-id="${esc(question.id)}" class="rounded-full border border-gray-200 px-2.5 py-1 text-xs text-gray-600 hover:border-blue-300 hover:bg-blue-50">${esc(snippet)}</button>`).join('')}
       </div>
-      <textarea data-response-id="${esc(question.id)}" rows="6" class="response-text w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="可輸入：目前作法、佐證文件、抽樣結果、例外情形、改善計畫。">${esc(state.responses[question.id] || '')}</textarea>
+      <textarea data-response-id="${esc(question.id)}" rows="3" class="response-text auto-grow-textarea w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="可輸入：目前作法、佐證文件、抽樣結果、例外情形、改善計畫。">${esc(state.responses[question.id] || '')}</textarea>
     </article>
   `).join('');
 
   document.querySelectorAll('.response-text').forEach(textarea => {
+    autoGrow(textarea);
     textarea.addEventListener('input', () => {
       state.responses[textarea.dataset.responseId] = textarea.value;
+      autoGrow(textarea);
       updateResponseProgress();
+      schedulePersist('responses');
     });
   });
   document.querySelectorAll('[data-response-snippet]').forEach(button => {
@@ -430,8 +510,10 @@ function renderResponses() {
       const prefix = textarea.value.trim() ? '\n' : '';
       textarea.value += `${prefix}${button.dataset.responseSnippet}：`;
       state.responses[id] = textarea.value;
+      autoGrow(textarea);
       textarea.focus();
       updateResponseProgress();
+      schedulePersist('responses');
     });
   });
 }
@@ -448,6 +530,7 @@ async function generateFindings() {
     state.findings = buildLocalFindings();
     state.findingFormat = 'local';
     state.findingSummary = '';
+    await saveFindingsOnly();
     hideLoading();
     renderFindings();
     return;
@@ -469,6 +552,7 @@ async function generateFindings() {
     state.findingSummary = '';
     document.getElementById('findings-status').textContent = `LLM 產生失敗，已改用規則草稿：${error.message}`;
   } finally {
+    await saveFindingsOnly();
     hideLoading();
     renderFindings();
   }
@@ -500,6 +584,22 @@ async function saveResponsesOnly() {
     await api('POST', `/sessions/${state.sessionId}/responses`, { responses });
   } catch (error) {
     setStatus(`回覆未寫入後端：${error.message}`);
+  }
+}
+
+async function saveFindingsOnly() {
+  try {
+    if (!state.sessionId || !getApiKey(false)) return;
+    await api('PUT', `/sessions/${state.sessionId}/findings`, {
+      findings: {
+        format: state.findingFormat,
+        summary: state.findingSummary,
+        items: state.findings,
+      },
+    });
+    markSynced();
+  } catch (error) {
+    setStatus(`稽核發現未寫入後端：${error.message}`);
   }
 }
 
@@ -780,6 +880,145 @@ async function ensureSession() {
     user_name: document.getElementById('user-name-input').value.trim(),
   });
   state.sessionId = created.session_id;
+  rememberSession(state.sessionId);
+}
+
+async function restoreCurrentSession() {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session') || localStorage.getItem('auditor_session_id');
+  if (!sessionId) {
+    updateSessionLink();
+    return;
+  }
+  try {
+    await loadSession(sessionId);
+  } catch (error) {
+    localStorage.removeItem('auditor_session_id');
+    updateSessionLink();
+    setStatus(`無法載入先前紀錄：${error.message}`);
+  }
+}
+
+async function loadSession(sessionId) {
+  state.isLoadingSession = true;
+  try {
+    const session = await api('GET', `/sessions/${sessionId}`);
+    state.sessionId = session.session_id;
+    state.frameworks = Array.isArray(session.frameworks) && session.frameworks.length
+      ? session.frameworks
+      : FRAMEWORKS.filter(item => item.primary).map(item => item.id);
+    state.responsibilityLevel = session.responsibility_level || '';
+    state.questions = normalizeQuestions(session.questions || []);
+    state.responses = responsesToMap(session.responses || []);
+    state.questionSource = state.questions.length ? 'loaded-session' : '';
+    restoreFindings(session.findings);
+
+    document.getElementById('user-name-input').value = session.user_name || localStorage.getItem('auditor_user_name') || '';
+    document.getElementById('resp-level').value = state.responsibilityLevel;
+    document.getElementById('scope-input').value = session.scope || '';
+    document.getElementById('context-input').value = session.context || '';
+
+    rememberSession(state.sessionId);
+    renderFrameworks();
+    renderTemplates();
+    renderQuestions(false);
+    renderResponses();
+    if (state.findings.length) renderFindings();
+    else document.getElementById('findings-list').innerHTML = '';
+    markSynced(session.updated_at);
+
+    if (state.findings.length) goToStep(5);
+    else if (state.questions.length && answeredCount() > 0) goToStep(4);
+    else if (state.questions.length) goToStep(3);
+    else if (session.scope || session.context) goToStep(2);
+    else goToStep(1);
+  } finally {
+    state.isLoadingSession = false;
+  }
+}
+
+function restoreFindings(saved) {
+  if (!saved) {
+    state.findings = [];
+    state.findingFormat = 'local';
+    state.findingSummary = '';
+    return;
+  }
+  if (Array.isArray(saved)) {
+    state.findings = saved;
+    state.findingFormat = 'local';
+    state.findingSummary = '';
+    return;
+  }
+  state.findings = Array.isArray(saved.items) ? saved.items : [];
+  state.findingFormat = saved.format || 'local';
+  state.findingSummary = saved.summary || '';
+}
+
+function responsesToMap(items) {
+  if (!Array.isArray(items)) return {};
+  return items.reduce((acc, item) => {
+    if (item?.question_id) acc[item.question_id] = item.response_text || '';
+    return acc;
+  }, {});
+}
+
+function schedulePersist(reason = 'auto') {
+  if (state.isLoadingSession) return;
+  if (!getApiKey(false)) {
+    document.getElementById('sync-status').textContent = '未設定同步';
+    return;
+  }
+  document.getElementById('sync-status').textContent = '待同步';
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => persistNow(reason), AUTOSAVE_DELAY);
+}
+
+async function persistNow(reason = 'auto') {
+  if (state.isLoadingSession || !getApiKey(false)) return;
+  clearTimeout(autosaveTimer);
+  try {
+    await ensureSession();
+    await api('POST', `/sessions/${state.sessionId}/framework`, {
+      frameworks: backendFrameworks(),
+      responsibility_level: state.responsibilityLevel || document.getElementById('resp-level').value || null,
+    });
+    await api('POST', `/sessions/${state.sessionId}/scope`, {
+      scope: getScope(),
+      context: getContext(),
+    });
+    if (state.questions.length) {
+      await api('PUT', `/sessions/${state.sessionId}/questions`, backendQuestionPayload());
+      await saveResponsesOnly();
+    }
+    if (state.findings.length) await saveFindingsOnly();
+    markSynced();
+  } catch (error) {
+    document.getElementById('sync-status').textContent = '同步失敗';
+    setStatus(`自動同步失敗：${error.message}`);
+  }
+}
+
+function rememberSession(sessionId) {
+  if (!sessionId) return;
+  localStorage.setItem('auditor_session_id', sessionId);
+  const url = new URL(window.location.href);
+  url.searchParams.set('session', sessionId);
+  window.history.replaceState({}, '', url);
+  updateSessionLink();
+}
+
+function updateSessionLink() {
+  const input = document.getElementById('session-link');
+  if (!input) return;
+  input.value = state.sessionId ? window.location.href : '尚未建立';
+}
+
+function markSynced(timestamp) {
+  const raw = timestamp ? new Date(timestamp) : new Date();
+  const label = raw.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('sync-status').textContent = `已同步 ${label}`;
+  updateSessionLink();
 }
 
 async function api(method, path, body) {
@@ -868,6 +1107,7 @@ function answeredCount() {
 }
 
 function resetAudit() {
+  clearTimeout(autosaveTimer);
   state.sessionId = null;
   state.questions = [];
   state.responses = {};
@@ -875,9 +1115,19 @@ function resetAudit() {
   state.findingFormat = 'local';
   state.findingSummary = '';
   state.activeTemplate = '';
+  state.questionSource = '';
+  localStorage.removeItem('auditor_session_id');
+  const url = new URL(window.location.href);
+  url.searchParams.delete('session');
+  window.history.replaceState({}, '', url);
   document.getElementById('scope-input').value = '';
   document.getElementById('context-input').value = '';
+  document.getElementById('resp-level').value = '';
+  document.getElementById('sync-status').textContent = '尚未同步';
+  updateSessionLink();
   renderTemplates();
+  renderFrameworks();
+  closeHistory();
   goToStep(1);
 }
 
@@ -887,6 +1137,11 @@ function stripCodeFence(value) {
 
 function cssEscape(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function autoGrow(textarea) {
+  textarea.style.height = '0px';
+  textarea.style.height = `${textarea.scrollHeight + 2}px`;
 }
 
 function showLoading(text) {
