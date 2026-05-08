@@ -1,23 +1,57 @@
-# Security Audit Assistant
+# 資安稽核助手
 
-AI-assisted security audit workflow for selecting audit frameworks, generating audit questions, collecting responses, and producing findings reports.
+AI-assisted security audit workflow for selecting audit frameworks, defining audit scope, generating open-ended audit questions, collecting auditee responses, and producing findings reports.
 
 The project has two deployable parts:
 
 - Backend: FastAPI service on Azure App Service
 - Frontend: static HTML/CSS/JavaScript published to GitHub Pages
 
+Current public frontend:
+
+```text
+https://ed100084.github.io/auditor/
+```
+
+Current application version:
+
+```text
+v2026.05.08.8
+```
+
 ## Main Features
 
-- Framework selection for CSMA, ISO 27001, ISO 27701, and custom uploaded references
-- Audit templates for common scopes such as annual CSMA audits, medical systems, IT operations, and ISO audits
-- AI-generated audit questions based on selected frameworks and audit scope
-- Response collection and report generation
+- Framework selection for Taiwan CSMA requirements, ISO 27001, ISO 27701, healthcare scenarios, and IT control domains
+- 22 common audit-scope templates, including outsourcing, access control, incident response, backup recovery, healthcare systems, privacy, data classification, vulnerability management, monitoring, change management, asset inventory, ransomware readiness, third-party remote maintenance, software supply chain, medical devices, HIS access, awareness training, and AI service usage
+- Adjustable audit-question generation by question depth, question count, and audit dimension
+- Open-ended audit questions with rule-based fallback when the LLM or API response is unavailable
+- Easier auditee response collection with autosave-oriented text areas
+- Persistent audit sessions stored in SQLite, designed for cross-device use between phone and desktop
+- Short session URLs such as `https://ed100084.github.io/auditor/?session=001`
+- "My audit records" panel for loading and deleting saved audit sessions
+- Visible frontend and API version indicators to reduce cache confusion
+- Finding generation with LLM support and local fallback drafts
 - Two report formats:
   - IIA 5C style findings
-  - Government-style findings and recommendations
+  - Government / MOHW-style findings and recommendations
 - Session storage with SQLite
 - API key protection for `/api/*` endpoints
+
+## User Workflow
+
+1. Choose audit frameworks and responsibility level.
+2. Define audit scope and context manually, or start from a common template.
+3. Generate and edit open-ended audit questions.
+4. Collect auditee responses.
+5. Generate audit findings in the selected format.
+
+Saved sessions are reusable across devices. After a session is created, the app displays a short URL:
+
+```text
+https://ed100084.github.io/auditor/?session=001
+```
+
+Entering that URL on another device loads the same audit record, as long as the API key is available in that browser.
 
 ## Project Structure
 
@@ -26,7 +60,7 @@ auditor/
   main.py                 FastAPI app, CORS, static frontend mount
   config.py               Environment settings
   models.py               Pydantic request/response models
-  audit_templates.py      Built-in audit templates
+  audit_templates.py      Legacy/backend audit templates API
   llm_service.py          Azure AI integration and JSON repair helpers
   session_store.py        SQLite session persistence
   dependencies/
@@ -39,6 +73,26 @@ auditor/
     js/                   ES module frontend code
   tests/                  Unit and API tests
 ```
+
+## Session Persistence
+
+The backend stores audit sessions in SQLite under `data/auditor.db`.
+
+New sessions use short numeric IDs:
+
+```text
+001
+002
+003
+```
+
+The frontend exposes these as short URLs:
+
+```text
+https://ed100084.github.io/auditor/?session=001
+```
+
+Older UUID-based session IDs are still supported if they already exist in the database.
 
 ## Local Setup
 
@@ -83,13 +137,16 @@ http://localhost:8000
 pytest tests -q
 ```
 
-Optional syntax checks for the frontend modules:
+Current expected test count:
+
+```text
+141 passed
+```
+
+Frontend syntax check:
 
 ```bash
-node --check static/js/api.js
-node --check static/js/state.js
-node --check static/js/ui.js
-node --check static/js/main.js
+node --check static/js/app.js
 ```
 
 ## Deployment
@@ -97,6 +154,13 @@ node --check static/js/main.js
 Backend deployment is handled by `.github/workflows/main_secauditor.yml`.
 
 Frontend deployment is handled by `.github/workflows/pages.yml`, which publishes the contents of `static/` to GitHub Pages.
+
+The frontend intentionally cache-busts CSS/JS assets with versioned query strings in `static/index.html`. When changing frontend behavior, update:
+
+- visible app version in `static/index.html`
+- `VERSION` in `static/js/app.js`
+- CSS/JS query-string version in `static/index.html`
+- `APP_VERSION` in `main.py` when backend-visible behavior changes
 
 Recommended Azure startup command:
 
@@ -119,3 +183,4 @@ ALLOWED_ORIGINS=https://ed100084.github.io
 - Runtime data is stored under `data/` and is ignored by git.
 - `.env`, SQLite databases, Python caches, pytest caches, virtual environments, and Claude worktrees are ignored.
 - API key auth accepts either `X-API-Key` or `api_key` query parameter. The query parameter is used by SSE endpoints.
+- Do not commit `.claude/settings.local.json`; it is local tooling state.
