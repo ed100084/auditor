@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.13';
+const VERSION = '2026.05.08.14';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -34,180 +34,59 @@ const FRAMEWORKS = [
 
 const TEMPLATES = [
   {
-    id: 'outsourcing',
-    name: '委外服務稽核',
-    category: '資安治理',
-    frameworks: ['csma_core', 'csma_classification', 'it_access_control'],
-    scope: '資訊服務委外管理、委外廠商資安要求、服務水準、稽核權、資安事件通報與改善追蹤。',
-    context: '年度例行稽核，重點確認委外合約是否納入資安要求、廠商是否定期提供佐證、缺失是否追蹤至改善完成。',
+    id: 'strategy',
+    name: '策略面',
+    category: '衛福部所屬醫院',
+    frameworks: ['csma_core', 'csma_classification', 'csma_incident'],
+    context: '衛福部所屬醫院資安稽核策略面，重點確認院層級治理、資源投入、關鍵醫療服務辨識、維護計畫績效與改善管考是否能支撐醫療營運韌性。',
+    items: [
+      ['governance', '院層級資安治理、資安長或權責主管支持、資安推動組織及跨單位協調機制。'],
+      ['policy', '資安政策、資通安全維護計畫、年度資安目標與醫院營運目標之連結。'],
+      ['critical_services', '門診、急診、住院、檢驗、影像、藥事等關鍵醫療服務及可容忍中斷時間辨識。'],
+      ['resources', '資安人力、預算、工具、外部服務與教育訓練資源配置。'],
+      ['risk_appetite', '醫療服務、病歷個資、醫療設備、委外供應鏈之主要資安風險與風險接受決策。'],
+      ['performance', '資安維護計畫實施情形、稽核缺失、弱點改善、事件檢討之績效管考。'],
+      ['ci_alignment', '關鍵基礎設施或重要醫療服務之主管機關要求、聯防、通報與演練配合情形。'],
+      ['board_reporting', '資安風險、重大事件、改善進度是否定期向院長室或管理會議回報。'],
+    ],
   },
   {
-    id: 'access',
-    name: '帳號權限稽核',
-    category: 'IT 控制',
-    frameworks: ['csma_core', 'iso27001', 'it_access_control'],
-    scope: 'AD/LDAP、核心系統帳號、特權帳號、權限申請異動、定期複核與離職停用。',
-    context: '確認帳號生命週期管理是否落實，並抽核高權限帳號、共用帳號、例外權限與定期複核紀錄。',
+    id: 'management',
+    name: '管理面',
+    category: '衛福部所屬醫院',
+    frameworks: ['csma_core', 'csma_classification', 'csma_incident', 'iso27701'],
+    context: '衛福部所屬醫院資安稽核管理面，重點確認制度、流程、紀錄、責任分工、委外監督、事件通報與營運持續管理是否落實到日常作業。',
+    items: [
+      ['maintenance_plan', '資通安全維護計畫訂定、修正、執行紀錄、差異檢討與年度提報。'],
+      ['asset_inventory', '資訊資產、醫療系統、伺服器、端點、網路設備、醫療設備與雲端資源盤點。'],
+      ['risk_assessment', '資產風險評鑑、控制措施選擇、高風險項目追蹤與風險接受核准。'],
+      ['account_access', 'HIS、EMR、PACS、LIS、AD/LDAP、特權帳號、共用帳號、離職停用與定期複核。'],
+      ['medical_record_privacy', '病歷查閱、個資存取、異常查詢、資料匯出、目的外使用與留痕管理。'],
+      ['outsourcing', '醫療資訊系統委外、維護合約、資安條款、廠商佐證、服務水準與稽核權。'],
+      ['remote_maintenance', '第三方遠端維護申請、臨時帳號、MFA、連線核准、操作紀錄、錄影與權限回收。'],
+      ['incident_response', '資安事件分級、通報、應變、復原、事後檢討、改善報告與主管機關回報。'],
+      ['business_continuity', 'BCP、DRP、替代作業、關鍵醫療服務演練、RTO/RPO 與復原驗證紀錄。'],
+      ['awareness', '醫護、行政、資訊、委外人員資安教育訓練、釣魚演練、未完成追蹤與高風險人員輔導。'],
+    ],
   },
   {
-    id: 'incident',
-    name: '事件通報與演練',
-    category: '事件應變',
-    frameworks: ['csma_core', 'csma_incident', 'it_incident_drill'],
-    scope: '資安事件分級、通報、應變、復原、事後檢討與年度演練。',
-    context: '確認事件處理流程與法定通報要求是否一致，並抽核近期演練或實際事件紀錄。',
-  },
-  {
-    id: 'backup',
-    name: '備份復原稽核',
-    category: '營運持續',
-    frameworks: ['csma_core', 'iso27001', 'it_backup_recovery'],
-    scope: '重要系統備份、不可變備份、離線備份、還原測試、RTO/RPO 與災害復原程序。',
-    context: '確認備份策略是否符合業務需求，並抽核還原測試紀錄、失敗改善追蹤與備份權限控管。',
-  },
-  {
-    id: 'health',
-    name: '醫療核心系統稽核',
-    category: '醫療情境',
-    frameworks: ['csma_core', 'csma_classification', 'health_his'],
-    scope: 'HIS、PACS、LIS 等醫療核心系統之存取控制、資料保護、系統介接、備份復原與營運持續。',
-    context: '醫療院所年度稽核，重點確認病歷與醫療資料安全、系統可用性、第三方維護與介接控管。',
-  },
-  {
-    id: 'cloud',
-    name: '雲端服務稽核',
-    category: '雲端安全',
-    frameworks: ['csma_core', 'iso27001', 'it_cloud_security'],
-    scope: '雲端 IAM、公開儲存、網路設定、日誌監控、CSPM、SaaS 管理與委外責任分工。',
-    context: '確認雲端設定符合資安基準，並抽核高權限角色、公開暴露資源、日誌告警與例外核准紀錄。',
-  },
-  {
-    id: 'personal_data',
-    name: '個資與隱私保護',
-    category: '法遵資料保護',
-    frameworks: ['csma_core', 'iso27701', 'it_access_control'],
-    scope: '個人資料蒐集、處理、利用、保存、刪除、委外處理、資料主體權利回應與個資事故通報。',
-    context: '確認個資盤點、告知同意、目的外利用控管、存取紀錄、去識別化與第三方處理者管理是否落實。',
-  },
-  {
-    id: 'data_classification',
-    name: '資料分級與保護',
-    category: '法遵資料保護',
-    frameworks: ['csma_core', 'csma_classification', 'iso27001'],
-    scope: '機敏資料盤點、資料分級標示、傳輸加密、儲存保護、下載匯出、外部分享與資料留存銷毀。',
-    context: '確認重要資料是否有明確擁有者、分級規則、使用限制、例外核准與定期檢視機制。',
-  },
-  {
-    id: 'network_segmentation',
-    name: '網路隔離與防火牆',
-    category: 'IT 控制',
-    frameworks: ['csma_core', 'iso27001', 'it_network_security'],
-    scope: '內外網區隔、伺服器區、醫療設備網段、管理網段、防火牆規則、VPN 與遠端連線。',
-    context: '抽核網段設計、規則異動單、過寬規則、長期例外、未使用規則清理與連線日誌監控。',
-  },
-  {
-    id: 'endpoint_protection',
-    name: '端點防護稽核',
-    category: 'IT 控制',
-    frameworks: ['csma_core', 'iso27001', 'it_vulnerability_mgmt'],
-    scope: '端點防毒/EDR、作業系統修補、硬碟加密、USB 控管、本機管理員權限與例外設備。',
-    context: '確認端點覆蓋率、告警處理、病毒碼更新、修補逾期、例外核准與高風險端點改善追蹤。',
-  },
-  {
-    id: 'vulnerability_patch',
-    name: '弱點掃描與修補',
-    category: 'IT 控制',
-    frameworks: ['csma_core', 'csma_classification', 'it_vulnerability_mgmt'],
-    scope: '弱點掃描範圍、掃描頻率、修補時限、風險排序、例外接受、複掃驗證與改善追蹤。',
-    context: '抽核近兩期弱掃報告，高風險弱點是否依時限改善，例外是否經風險評估與權責主管核准。',
-  },
-  {
-    id: 'logging_monitoring',
-    name: '日誌監控與告警',
-    category: '監控偵測',
-    frameworks: ['csma_core', 'iso27001', 'it_network_security'],
-    scope: '系統日誌、帳號登入紀錄、特權操作紀錄、SIEM/SOC 告警、日誌保存期限與異常事件處置。',
-    context: '確認重要系統是否納管日誌、告警規則是否有效、告警是否有人處理，並抽核事件工單與調查紀錄。',
-  },
-  {
-    id: 'change_management',
-    name: '系統變更管理',
-    category: 'IT 治理',
-    frameworks: ['csma_core', 'iso27001'],
-    scope: '系統變更申請、影響評估、測試驗證、上線核准、緊急變更、回復計畫與變更後檢討。',
-    context: '抽核正式變更與緊急變更紀錄，確認職責分工、測試證據、核准層級與未授權變更偵測。',
-  },
-  {
-    id: 'asset_inventory',
-    name: '資產盤點管理',
-    category: 'IT 治理',
-    frameworks: ['csma_core', 'csma_classification', 'iso27001'],
-    scope: '資訊資產清冊、重要系統、伺服器、端點、網路設備、雲端資源、醫療設備與資產異動維護。',
-    context: '確認資產清冊完整性、責任人、重要性標示、生命週期狀態、未授權設備偵測與定期盤點差異處理。',
-  },
-  {
-    id: 'business_continuity',
-    name: '營運持續管理',
-    category: '營運持續',
-    frameworks: ['csma_core', 'iso27001', 'it_backup_recovery'],
-    scope: 'BCP、DRP、BIA、關鍵系統 RTO/RPO、替代作業、演練計畫、演練缺失與改善追蹤。',
-    context: '確認營運衝擊分析是否更新，演練是否涵蓋關鍵服務、跨單位通報、手工作業與復原驗證。',
-  },
-  {
-    id: 'ransomware_readiness',
-    name: '勒索軟體防護',
-    category: '營運持續',
-    frameworks: ['csma_core', 'csma_incident', 'it_backup_recovery'],
-    scope: '不可變備份、端點偵測、網路隔離、特權控管、事件通報、復原演練與勒索情境應變劇本。',
-    context: '以勒索軟體情境檢視預防、偵測、通報、隔離、復原與對外溝通，並抽核備份不可竄改與還原可行性。',
-  },
-  {
-    id: 'third_party_remote',
-    name: '第三方遠端維護',
-    category: '供應鏈委外',
-    frameworks: ['csma_core', 'csma_classification', 'it_access_control'],
-    scope: '廠商遠端連線、臨時帳號、MFA、連線核准、操作錄影/日誌、維護時段與權限回收。',
-    context: '確認第三方維護是否採最小權限、每次核准、全程留痕，並抽核高風險系統與醫療設備維護紀錄。',
-  },
-  {
-    id: 'software_supplier',
-    name: '軟體供應鏈稽核',
-    category: '供應鏈委外',
-    frameworks: ['csma_core', 'iso27001', 'health_supply_chain'],
-    scope: '系統開發委外、套裝軟體、開源套件、版本更新、SBOM、弱點通知、驗收測試與上線交付。',
-    context: '確認廠商交付物、弱點修補承諾、程式碼/套件風險、版本維護與緊急修補通知機制。',
-  },
-  {
-    id: 'medical_device',
-    name: '醫療設備資安',
-    category: '醫療情境',
-    frameworks: ['csma_core', 'health_iomt', 'it_network_security'],
-    scope: 'IoMT 與醫療設備資產盤點、網段隔離、帳號密碼、修補限制、廠商維護、日誌與汰換計畫。',
-    context: '確認醫療設備是否納入資安管理，對無法修補或停機困難設備是否有補償控制與風險接受紀錄。',
-  },
-  {
-    id: 'his_access',
-    name: 'HIS 權限與病歷存取',
-    category: '醫療情境',
-    frameworks: ['csma_core', 'csma_classification', 'health_his'],
-    scope: 'HIS 使用者權限、角色設定、病歷查閱、異常查詢、離職停用、特權維護與稽核軌跡。',
-    context: '抽核醫師、護理、行政、資訊人員角色權限，確認病歷查閱是否有必要性、異常存取是否偵測與處理。',
-  },
-  {
-    id: 'security_awareness',
-    name: '資安教育與釣魚演練',
-    category: '人員管理',
-    frameworks: ['csma_core', 'iso27001', 'it_security_awareness'],
-    scope: '年度資安教育、到訓率、測驗結果、釣魚郵件演練、高風險人員輔導與外包人員訓練。',
-    context: '確認訓練對象完整性、未完成追蹤、演練結果改善、重複中招人員輔導與管理階層回報。',
-  },
-  {
-    id: 'ai_service_usage',
-    name: 'AI 服務使用管理',
-    category: '新興風險',
-    frameworks: ['csma_core', 'iso27001', 'iso27701'],
-    scope: '生成式 AI 工具使用、敏感資料輸入限制、帳號管理、供應商條款、輸出驗證、紀錄保存與教育宣導。',
-    context: '確認單位是否有 AI 使用規範，員工是否避免輸入病歷、個資、機敏資料，並檢視例外核准與監督機制。',
+    id: 'technical',
+    name: '技術面',
+    category: '衛福部所屬醫院',
+    frameworks: ['csma_core', 'csma_classification', 'it_network_security', 'it_backup_recovery', 'it_vulnerability_mgmt'],
+    context: '衛福部所屬醫院資安稽核技術面，重點確認醫療核心系統、網路、端點、醫療設備、弱點修補、監控告警、備份復原及外部曝險防護是否有效。',
+    items: [
+      ['core_systems', 'HIS、EMR、PACS、LIS、RIS、藥局、掛號、批價、住院、急診等醫療核心系統防護。'],
+      ['network_segmentation', '醫療設備網、行政網、伺服器區、DMZ、無線網路、VPN 與防火牆規則隔離。'],
+      ['vulnerability', '弱點掃描、滲透測試、修補時限、例外接受、複掃驗證與高風險弱點追蹤。'],
+      ['monitoring', '系統日誌、病歷查閱紀錄、特權操作、SIEM/SOC、告警規則、事件工單與保存期限。'],
+      ['endpoint', '端點防毒/EDR、作業系統修補、硬碟加密、USB 控管、本機管理員與組態基準。'],
+      ['backup_recovery', 'HIS/PACS/LIS 備份、不可變備份、離線備份、還原測試、勒索軟體復原劇本。'],
+      ['iomt', 'IoMT 與醫療設備資產盤點、預設密碼、修補限制、網段隔離、廠商維護與汰換計畫。'],
+      ['external_exposure', '網際網路曝險服務、遠端入口、公開系統、憑證、DNS、WAF 與外部曝險檢測。'],
+      ['cloud_saas', '雲端、SaaS、AI 服務、公開儲存、IAM、日誌、資料輸入限制與供應商安全設定。'],
+      ['threat_intel', '資安情資接收、弱點通告、IOC 封鎖、聯防通報與技術改善追蹤。'],
+    ],
   },
 ];
 
@@ -231,6 +110,7 @@ const state = {
   findingSummary: '',
   questionSource: '',
   activeTemplate: '',
+  templateSelections: {},
   isLoadingSession: false,
 };
 
@@ -475,35 +355,99 @@ function frameworkCard(item) {
 }
 
 function renderTemplates() {
-  document.getElementById('template-list').innerHTML = TEMPLATES.map(template => `
-    <button type="button" data-template-id="${esc(template.id)}"
-      class="rounded-lg border ${state.activeTemplate === template.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'} p-3 text-left hover:border-blue-400 hover:bg-blue-50">
-      <div class="flex items-center justify-between gap-2">
-        <span class="text-sm font-semibold text-gray-800">${esc(template.name)}</span>
-        <span class="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">${esc(template.category)}</span>
+  const active = TEMPLATES.find(item => item.id === state.activeTemplate) || TEMPLATES[0];
+  const selected = selectedTemplateItemIds(active);
+  document.getElementById('template-list').innerHTML = `
+    <div class="space-y-4">
+      <div class="grid grid-cols-3 gap-2">
+        ${TEMPLATES.map(template => `
+          <button type="button" data-template-tab="${esc(template.id)}"
+            class="rounded-lg border px-3 py-2 text-sm font-semibold ${active.id === template.id ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:bg-blue-50'}">
+            ${esc(template.name)}
+          </button>
+        `).join('')}
       </div>
-      <p class="mt-1 line-clamp-2 text-xs text-gray-500">${esc(template.scope)}</p>
-    </button>
-  `).join('');
-  document.querySelectorAll('[data-template-id]').forEach(button => {
-    button.addEventListener('click', () => applyTemplate(button.dataset.templateId));
+      <div class="rounded-lg border border-gray-200 bg-white p-4">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-semibold text-gray-800">${esc(active.name)}稽核範圍</p>
+            <p class="mt-1 text-xs text-gray-500">預設涵蓋本面向所需範圍，取消不納入本次稽核的項目。</p>
+          </div>
+          <button type="button" data-apply-template="${esc(active.id)}" class="rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700">套用目前範圍</button>
+        </div>
+        <div class="grid gap-2 md:grid-cols-2">
+          ${active.items.map(([id, text]) => `
+            <label class="flex cursor-pointer items-start gap-2 rounded-md border ${selected.includes(id) ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white'} p-3 text-sm">
+              <input type="checkbox" class="template-item mt-1 accent-blue-600" data-template-item="${esc(id)}" ${selected.includes(id) ? 'checked' : ''}>
+              <span class="leading-relaxed text-gray-700">${esc(text)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+  document.querySelectorAll('[data-template-tab]').forEach(button => {
+    button.addEventListener('click', () => applyTemplate(button.dataset.templateTab));
   });
+  document.querySelectorAll('[data-apply-template]').forEach(button => {
+    button.addEventListener('click', () => syncTemplateInputs(button.dataset.applyTemplate));
+  });
+  document.querySelectorAll('[data-template-item]').forEach(input => {
+    input.addEventListener('change', () => updateTemplateSelection(active.id));
+  });
+}
+
+function selectedTemplateItemIds(template) {
+  const saved = state.templateSelections[template.id];
+  if (Array.isArray(saved) && saved.length) return saved;
+  return template.items.map(([id]) => id);
+}
+
+function updateTemplateSelection(templateId) {
+  const template = TEMPLATES.find(item => item.id === templateId);
+  if (!template) return;
+  state.activeTemplate = template.id;
+  const selected = [...document.querySelectorAll('[data-template-item]:checked')].map(input => input.dataset.templateItem);
+  if (!selected.length) {
+    showToast('至少保留一個稽核範圍。');
+    state.templateSelections[template.id] = template.items.map(([id]) => id);
+  } else {
+    state.templateSelections[template.id] = selected;
+  }
+  syncTemplateInputs(template.id);
+  renderTemplates();
 }
 
 function applyTemplate(id) {
   const template = TEMPLATES.find(item => item.id === id);
   if (!template) return;
   state.activeTemplate = id;
-  state.frameworks = [...new Set([...state.frameworks, ...template.frameworks])];
-  document.getElementById('scope-input').value = template.scope;
-  document.getElementById('context-input').value = template.context;
-  renderFrameworks();
+  syncTemplateInputs(id);
   renderTemplates();
+}
+
+function syncTemplateInputs(id = state.activeTemplate) {
+  const template = TEMPLATES.find(item => item.id === id);
+  if (!template) return;
+  state.activeTemplate = template.id;
+  state.frameworks = [...new Set([...state.frameworks, ...template.frameworks])];
+  const selected = selectedTemplateItemIds(template);
+  const selectedItems = template.items.filter(([itemId]) => selected.includes(itemId));
+  document.getElementById('scope-input').value = [
+    `衛福部所屬醫院資安稽核 - ${template.name}`,
+    ...selectedItems.map(([, text]) => `- ${text}`),
+  ].join('\n');
+  document.getElementById('context-input').value = [
+    template.context,
+    `本次先納入 ${selectedItems.length} 項${template.name}稽核範圍，未勾選項目視為本次不查或另案追蹤。`,
+  ].join('\n\n');
+  renderFrameworks();
   schedulePersist('template');
 }
 
 function clearTemplate() {
   state.activeTemplate = '';
+  state.templateSelections = {};
   document.getElementById('scope-input').value = '';
   document.getElementById('context-input').value = '';
   renderTemplates();
@@ -1380,6 +1324,7 @@ function resetAudit() {
   state.findingFormat = DEFAULT_FINDING_FORMAT;
   state.findingSummary = '';
   state.activeTemplate = '';
+  state.templateSelections = {};
   state.questionSource = '';
   localStorage.removeItem('auditor_session_id');
   const url = new URL(window.location.href);
