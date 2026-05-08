@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.11';
+const VERSION = '2026.05.08.12';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -273,7 +273,7 @@ function bindEvents() {
   document.getElementById('context-input').addEventListener('input', () => schedulePersist('scope'));
   document.getElementById('generate-questions').addEventListener('click', generateQuestions);
   document.getElementById('regenerate-questions').addEventListener('click', () => {
-    state.questions = buildLocalQuestions(getScope(), getContext());
+    state.questions = adaptQuestionsToSettings([]);
     state.questionSource = currentTemplate() ? 'template-settings' : 'frontend-settings';
     renderQuestions(false);
     schedulePersist('questions');

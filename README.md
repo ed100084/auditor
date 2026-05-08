@@ -16,7 +16,7 @@ https://ed100084.github.io/auditor/
 Current application version:
 
 ```text
-v2026.05.08.11
+v2026.05.08.12
 ```
 
 ## Main Features
