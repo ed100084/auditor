@@ -1,4 +1,4 @@
-const VERSION = '2026.05.08.10';
+const VERSION = '2026.05.08.11';
 const API_BASE = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
   ? window.location.origin
   : 'https://secauditor.azurewebsites.net';
@@ -542,7 +542,7 @@ async function generateQuestions() {
   }
 
   if (questions.length === 0) {
-    questions = buildLocalQuestions(scope, context);
+    questions = adaptQuestionsToSettings([]);
     if (!state.questionSource) state.questionSource = 'frontend-empty-response';
   } else {
     questions = adaptQuestionsToSettings(questions);
@@ -566,9 +566,13 @@ function adaptQuestionsToSettings(questions) {
 
 function renderQuestions(useGuard = true) {
   if (useGuard && state.questions.length === 0) {
-    state.questions = buildLocalQuestions(getScope(), getContext());
+    state.questions = adaptQuestionsToSettings([]);
     state.questionSource = 'render-guard';
   }
+  state.questions = state.questions.map(question => ({
+    ...question,
+    text: normalizeQuestionText(question.text),
+  }));
   document.getElementById('q-count-badge').textContent = `${state.questions.length} 題`;
   document.getElementById('question-source').textContent =
     state.questionSource === 'loaded-session'
@@ -897,7 +901,7 @@ function buildLocalQuestions(scope, context) {
   return base.slice(0, count).map(([category, reference, text], index) => {
     const dimension = dimensions[index % dimensions.length];
     const focused = focus ? `${text}\n\n本題聚焦場景：${focus}` : text;
-    return enrichQuestion(makeQuestion(focused, category, source, reference, dimension.label), dimension);
+    return makeQuestion(focused, category, source, reference, dimension.label);
   });
 }
 
@@ -948,7 +952,7 @@ function buildTemplateQuestions(template, scope, context) {
       `情境背景：${contextText}`,
       `本次範圍：${scopeText}`,
     ].join('\n\n');
-    return enrichQuestion(makeQuestion(focused, category, target, reference, dimension.label), dimension);
+    return makeQuestion(focused, category, target, reference, dimension.label);
   });
 }
 
@@ -964,9 +968,33 @@ function enrichQuestion(question, dimension) {
   if (depth === 'evidence') suffix.push('佐證追問：請列出最適合抽核的三類證據，以及每類證據可以證明或不能證明什麼。');
   return {
     ...question,
-    text: [question.text, ...suffix].join('\n'),
+    text: normalizeQuestionText([stripQuestionHints(question.text), ...suffix].join('\n')),
     dimension_label: dimension?.label || question.dimension_label || '系統性探詢',
   };
+}
+
+function stripQuestionHints(text = '') {
+  return String(text)
+    .split('\n')
+    .filter(line => !/^\s*(追問重點|深入追問|佐證追問)：/.test(line))
+    .join('\n')
+    .trim();
+}
+
+function normalizeQuestionText(text = '') {
+  const seenHintLines = new Set();
+  const lines = String(text).split('\n');
+  const normalized = [];
+  for (const line of lines) {
+    const key = line.trim();
+    if (/^(追問重點|深入追問|佐證追問)：/.test(key)) {
+      if (seenHintLines.has(key)) continue;
+      seenHintLines.add(key);
+    }
+    if (key && normalized[normalized.length - 1]?.trim() === key) continue;
+    normalized.push(line);
+  }
+  return normalized.join('\n').trim();
 }
 
 function makeQuestion(text, category, sourceFramework, reference, dimensionLabel) {
